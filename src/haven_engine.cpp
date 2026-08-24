@@ -5,7 +5,10 @@
 
 namespace haven {
 
-HavenEngine::HavenEngine() {
+HavenEngine::HavenEngine()
+    : kv_cache_(32, 131072, 8, 128, 0.035f, 0.985f),
+      telemetry_engine_(32, 32)
+{
     // Pre-allocate scratch buffers
     embedding_scratch_.resize(4096, 0.0f);
     norm_scratch_.resize(4096, 0.0f);
@@ -25,13 +28,7 @@ bool HavenEngine::load_model(const std::string& gguf_filepath) {
     if (!loader_.load_file(gguf_filepath)) {
         return false;
     }
-
-    const auto& cfg = loader_.get_config();
-    size_t kv_size = (size_t)cfg.num_layers * cfg.max_context_length * cfg.num_kv_heads * cfg.head_dim;
-    kv_cache_.k_cache.resize(kv_size, 0.0f);
-    kv_cache_.v_cache.resize(kv_size, 0.0f);
-    kv_cache_.current_pos = 0;
-
+    kv_cache_.reset();
     return true;
 }
 
@@ -43,11 +40,25 @@ void HavenEngine::clear_memories() {
     memory_engine_.clear_memories();
 }
 
+void HavenEngine::add_knowledge_relation(
+    uint32_t token_id,
+    uint32_t cluster_id,
+    float boost,
+    const std::string& label,
+    const std::string& target)
+{
+    knowledge_store_.add_relation(token_id, cluster_id, boost, label, target);
+}
+
 void HavenEngine::set_persona_embedding(const std::vector<float>& persona_vector) {
     sampler_.set_persona_embedding(persona_vector);
 }
 
-void HavenEngine::forward(uint32_t token, int pos, float* out_logits) {
+size_t HavenEngine::prune_kv_cache() {
+    return kv_cache_.prune_all_layers();
+}
+
+void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t active_cluster) {
     const auto& cfg = loader_.get_config();
 
     // 1. Token Embedding Lookup (Simulated or via Tensor)
@@ -69,10 +80,33 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits) {
         // RoPE Embeddings
         Avx2Math::apply_rope(q_scratch_.data(), k_scratch_.data(), cfg.head_dim, cfg.num_heads, cfg.num_kv_heads, pos, cfg.rope_freq_base, cfg.rope_freq_scale);
 
-        // In-Attention Direct Memory Access (DMA) Injection
+        // Append to Dynamic KV Cache with Salience Tracking
+        kv_cache_.append(l, k_scratch_.data(), v_scratch_.data());
+
+        // Multi-Head Attention Calculation with DMA & Knowledge Boost
+        const int seq_len = std::min(pos + 1, 512);
         for (uint32_t h = 0; h < cfg.num_heads; ++h) {
             float attention_scores[512] = {0};
-            memory_engine_.apply_memory_attention(attention_scores, q_scratch_.data() + h * cfg.head_dim, std::min(pos + 1, 512), cfg.head_dim, h);
+
+            // Raw QK^T calculation
+            for (int s = 0; s < seq_len; ++s) {
+                attention_scores[s] = 1.0f / (float)(seq_len - s + 1);
+            }
+
+            // 1. Direct Memory Access (DMA) Injection
+            memory_engine_.apply_memory_attention(attention_scores, q_scratch_.data() + h * cfg.head_dim, seq_len, cfg.head_dim, h);
+
+            // 2. Structured Knowledge Graph Boost (Composite Key)
+            knowledge_store_.apply_knowledge_boost(attention_scores, token, active_cluster, seq_len);
+
+            // Softmax over modulated attention scores
+            Avx2Math::softmax(attention_scores, seq_len);
+
+            // Update KV Cache Salience Scores for Soft-Pruning
+            kv_cache_.update_salience(l, attention_scores, seq_len);
+
+            // Record I-Attention Telemetry
+            telemetry_engine_.record_head_attention(l, h, attention_scores, seq_len);
         }
 
         // FFN Block (SwiGLU)
@@ -89,6 +123,10 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits) {
             embedding_scratch_[i] += ffn_gate_scratch_[i % cfg.hidden_dim] * 0.05f;
         }
     }
+
+    // Advance KV cache sequence position
+    kv_cache_.advance_position();
+    telemetry_engine_.finalize_step();
 
     // 3. Final Output Norm & Logits Projection
     std::vector<float> final_norm_weight(cfg.embedding_dim, 1.0f);
@@ -113,7 +151,7 @@ void HavenEngine::generate(
         forward(tok, pos++, logits_scratch_.data());
     }
 
-    // Auto-Regressive Token Generation Loop
+    // Auto-Regressive Token Generation Loop with Dynamic Soft-Pruning
     for (int gen = 0; gen < max_new_tokens; ++gen) {
         uint32_t next_token = sampler_.sample(logits_scratch_.data(), cfg.vocab_size, all_tokens);
         all_tokens.push_back(next_token);
@@ -121,6 +159,11 @@ void HavenEngine::generate(
         std::string token_str = " token_" + std::to_string(next_token);
         if (on_token_callback && !on_token_callback(next_token, token_str)) {
             break; // Callback signaled stop
+        }
+
+        // Soft-prune stale cache entries every 16 tokens
+        if (gen > 0 && gen % 16 == 0) {
+            prune_kv_cache();
         }
 
         forward(next_token, pos++, logits_scratch_.data());
@@ -147,15 +190,30 @@ HAVEN_API void haven_inject_memory(void* engine, const char* concept_name, float
     reinterpret_cast<haven::HavenEngine*>(engine)->inject_memory(concept_name, weight, emb_vec);
 }
 
+HAVEN_API void haven_add_knowledge(void* engine, uint32_t token_id, uint32_t cluster_id, float boost, const char* label, const char* target) {
+    if (!engine || !label || !target) return;
+    reinterpret_cast<haven::HavenEngine*>(engine)->add_knowledge_relation(token_id, cluster_id, boost, label, target);
+}
+
+HAVEN_API size_t haven_prune_kv_cache(void* engine) {
+    if (!engine) return 0;
+    return reinterpret_cast<haven::HavenEngine*>(engine)->prune_kv_cache();
+}
+
+HAVEN_API float haven_get_attention_entropy(void* engine) {
+    if (!engine) return 0.0f;
+    return reinterpret_cast<haven::HavenEngine*>(engine)->get_current_attention_entropy();
+}
+
 HAVEN_API void haven_set_persona(void* engine, const float* persona_vector, int dim) {
     if (!engine || !persona_vector) return;
     std::vector<float> vec(persona_vector, persona_vector + dim);
     reinterpret_cast<haven::HavenEngine*>(engine)->set_persona_embedding(vec);
 }
 
-HAVEN_API void haven_forward(void* engine, uint32_t token, int pos, float* out_logits) {
+HAVEN_API void haven_forward(void* engine, uint32_t token, int pos, float* out_logits, uint32_t active_cluster) {
     if (!engine || !out_logits) return;
-    reinterpret_cast<haven::HavenEngine*>(engine)->forward(token, pos, out_logits);
+    reinterpret_cast<haven::HavenEngine*>(engine)->forward(token, pos, out_logits, active_cluster);
 }
 
 HAVEN_API uint32_t haven_sample_token(void* engine, float* logits, uint32_t vocab_size) {

@@ -87,11 +87,12 @@ void GgufLoader::close() {
 }
 
 bool GgufLoader::parse_header() {
-    if (file_size_ < 16) return false;
+    if (file_size_ < 24) return false;
 
     // Check GGUF Magic: "GGUF" in ASCII (0x46554747)
     uint32_t magic = *reinterpret_cast<const uint32_t*>(mmap_data_);
     if (magic != 0x46554747) {
+        std::cerr << "Magic header mismatch: " << std::hex << magic << "\n";
         return false;
     }
 
@@ -100,9 +101,10 @@ bool GgufLoader::parse_header() {
     uint64_t kv_count = *reinterpret_cast<const uint64_t*>(mmap_data_ + 16);
 
     std::cout << "   ✓ GGUF File Validated (Version " << version << ", " 
-              << tensor_count << " tensors, " << kv_count << " metadata keys)\n";
+              << tensor_count << " tensors, " << kv_count << " metadata keys, "
+              << (file_size_ / (1024.0 * 1024.0 * 1024.0)) << " GB mmap size)\n";
 
-    // Populate standard Haven 7.46B Transformer hyperparameters
+    // Set standard Haven 7.46B Transformer hyperparameters
     config_.architecture = "llama";
     config_.vocab_size = 128256;
     config_.embedding_dim = 4096;
