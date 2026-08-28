@@ -422,6 +422,10 @@ private:
         }
 
         auto tokens = haven_engine_.tokenize(prompt, true);
+        if (tokens.size() > 4096) {
+            tokens.erase(tokens.begin(), tokens.begin() + (tokens.size() - 4096));
+        }
+
         std::string accumulated_response = "";
 
         // Reset KV cache for fresh prompt and execute forward prefill
@@ -434,6 +438,12 @@ private:
             haven_engine_.forward(tokens[i], active_pos++, is_last ? logits.data() : nullptr);
         }
 
+        std::vector<uint32_t> context_history;
+        size_t start_h = (tokens.size() > 64) ? (tokens.size() - 64) : 0;
+        for (size_t i = start_h; i < tokens.size(); ++i) {
+            context_history.push_back(tokens[i]);
+        }
+
         if (stream) {
             std::string sse_hdr = "HTTP/1.1 200 OK\r\n"
                                   "Content-Type: text/event-stream\r\n"
@@ -442,11 +452,10 @@ private:
                                   "Access-Control-Allow-Origin: *\r\n\r\n";
             send(client_sock, sse_hdr.c_str(), (int)sse_hdr.length(), 0);
 
-            std::vector<uint32_t> turn_generated_tokens;
             for (int gen = 0; gen < max_tokens; ++gen) {
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
-                    logits.data(), haven_engine_.get_config().vocab_size, turn_generated_tokens);
-                turn_generated_tokens.push_back(next_tok);
+                    logits.data(), haven_engine_.get_config().vocab_size, context_history);
+                context_history.push_back(next_tok);
 
                 // Stop conditions
                 if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
@@ -470,11 +479,10 @@ private:
             std::string done_chunk = "data: {\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion.chunk\",\"model\":\"haven-chat-v5.0\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
             send(client_sock, done_chunk.c_str(), (int)done_chunk.length(), 0);
         } else {
-            std::vector<uint32_t> turn_generated_tokens;
             for (int gen = 0; gen < max_tokens; ++gen) {
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
-                    logits.data(), haven_engine_.get_config().vocab_size, turn_generated_tokens);
-                turn_generated_tokens.push_back(next_tok);
+                    logits.data(), haven_engine_.get_config().vocab_size, context_history);
+                context_history.push_back(next_tok);
 
                 if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
                     break;

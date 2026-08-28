@@ -39,17 +39,39 @@ uint32_t PersonaSampler::sample(
         return best_token;
     }
 
-    // 1. Intelligent N-Gram & Anti-Stutter Filtering (DRY)
+    // 1. Standard Token Frequency / Repetition Penalty
+    if (params_.repetition_penalty > 1.0f && !recent_tokens.empty()) {
+        std::unordered_map<uint32_t, int> token_counts;
+        size_t start_idx = (recent_tokens.size() > (size_t)params_.dry_penalty_last_n) 
+            ? (recent_tokens.size() - params_.dry_penalty_last_n) : 0;
+
+        for (size_t i = start_idx; i < recent_tokens.size(); ++i) {
+            token_counts[recent_tokens[i]]++;
+        }
+
+        for (const auto& [token_id, count] : token_counts) {
+            if (token_id < vocab_size) {
+                float penalty = std::pow(params_.repetition_penalty, std::min(count, 4));
+                if (logits[token_id] > 0.0f) {
+                    logits[token_id] /= penalty;
+                } else {
+                    logits[token_id] *= penalty;
+                }
+            }
+        }
+    }
+
+    // 2. Intelligent N-Gram & Anti-Stutter Filtering (DRY)
     if (!recent_tokens.empty()) {
         const size_t n_tokens = recent_tokens.size();
         uint32_t last_token = recent_tokens.back();
 
-        // 1a. Consecutive Word Stutter Suppression (skip single-char & formatting tokens < 256)
+        // 2a. Consecutive Exact Word Stutter Suppression (skip formatting tokens < 256)
         if (last_token < vocab_size && last_token > 256) {
-            logits[last_token] -= 1.5f;
+            logits[last_token] -= 2.0f;
         }
 
-        // 1b. 3-gram and 2-gram Phrase Repetition Suppression
+        // 2b. 3-gram and 2-gram Phrase Repetition Suppression
         if (n_tokens >= 2) {
             uint32_t prev1 = recent_tokens[n_tokens - 1];
             uint32_t prev2 = recent_tokens[n_tokens - 2];
@@ -58,14 +80,14 @@ uint32_t PersonaSampler::sample(
                 if (recent_tokens[i] == prev2 && recent_tokens[i + 1] == prev1) {
                     uint32_t repeated_follower = recent_tokens[i + 2];
                     if (repeated_follower < vocab_size) {
-                        logits[repeated_follower] -= 3.0f; // Prevent 3-gram phrase loop
+                        logits[repeated_follower] -= 4.0f; // Strongly break 3-gram phrase loops
                     }
                 }
             }
         }
     }
 
-    // 2. Anti-Robotic Tone Penalties
+    // 3. Anti-Robotic Tone Penalties
     for (const auto& [token_id, penalty] : token_penalties_) {
         if (token_id < vocab_size) {
             logits[token_id] -= penalty;
@@ -88,9 +110,12 @@ uint32_t PersonaSampler::sample(
         }
     }
 
-    // 4. Softmax with Temperature
+    // 4. Softmax with Temperature & Numerical Stability Clamping
     float max_logit = -1e9f;
     for (uint32_t i = 0; i < vocab_size; ++i) {
+        if (std::isnan(logits[i]) || std::isinf(logits[i])) {
+            logits[i] = -1e4f;
+        }
         if (logits[i] > max_logit) max_logit = logits[i];
     }
 
@@ -103,6 +128,10 @@ uint32_t PersonaSampler::sample(
         float p = std::exp((logits[i] - max_logit) * inv_temp);
         probs.push_back({p, i});
         sum_exp += p;
+    }
+
+    if (sum_exp <= 1e-9f || std::isnan(sum_exp)) {
+        sum_exp = 1.0f;
     }
 
     for (auto& item : probs) {
