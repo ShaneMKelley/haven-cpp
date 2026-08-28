@@ -151,6 +151,54 @@ set_target_properties(plugin_circadian PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
 )
 
+add_library(plugin_workspace_coder SHARED
+    plugins/workspace_coder_plugin.cpp
+)
+set_target_properties(plugin_workspace_coder PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_terminal SHARED
+    plugins/terminal_sandbox_plugin.cpp
+)
+set_target_properties(plugin_terminal PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_clipboard SHARED
+    plugins/clipboard_inspector_plugin.cpp
+)
+set_target_properties(plugin_clipboard PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_sqlite_graph SHARED
+    plugins/sqlite_graph_plugin.cpp
+)
+set_target_properties(plugin_sqlite_graph PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_whisper_ear SHARED
+    plugins/whisper_audio_ear_plugin.cpp
+)
+set_target_properties(plugin_whisper_ear PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_smart_home SHARED
+    plugins/smart_home_iot_plugin.cpp
+)
+set_target_properties(plugin_smart_home PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
 if (WIN32)
     target_link_libraries(haven-server ws2_32 psapi)
     target_link_libraries(test-standalone ws2_32)
@@ -163,4 +211,6 @@ if (WIN32)
     target_link_libraries(plugin_voice_synth winhttp)
     target_link_libraries(plugin_browser winhttp shell32)
     target_link_libraries(plugin_gaming psapi)
+    target_link_libraries(plugin_whisper_ear winhttp)
+    target_link_libraries(plugin_smart_home winhttp)
 endif()

@@ -23,10 +23,16 @@
 
 ---
 
-## 🔌 Built-In Sovereign Plugins (10 Active Plugins)
+## 🔌 Built-In Sovereign Plugins (17 Active Plugins)
 
 | Plugin | Type | Description |
 | :--- | :--- | :--- |
+| **📁 Local Workspace & Code Assistant** | Action & Memory | Inspects project files, reads source code, lists directories, and searches codebases with zero cloud leakage. |
+| **🐚 Native Terminal & Shell Sandbox** | Action Tool | Safely executes local shell commands (`dir`, `git`, `python`, `tree`), capturing stdout/stderr into attention. |
+| **📋 Windows Clipboard Bridge** | Sensory & Action | Reads copied text, URLs, and code snippets directly from the active Windows clipboard buffer. |
+| **🧠 Relational Knowledge Graph** | Cognitive Memory | Stores persistent `(Subject -> Predicate -> Object)` structured relational memory triples in SQLite format. |
+| **🎙️ Whisper Neural Audio Ear** | Sensory Input | Transcribes microphone audio streams and speech audio into text via Whisper C++ (Port 8087). |
+| **💡 Home Assistant & IoT Controller** | Action Tool | Controls smart lights, plugs, and ambient room illumination via Home Assistant REST API (Port 8123). |
 | **🌐 Sovereign Web Browser** | Action & Memory | Real-time HTML-to-markdown webpage browsing, DOM text extraction, and desktop browser launcher. |
 | **🎮 Steam & Gaming Companion** | Sensory & Action | Detects active PC/Steam games in real-time, logs gameplay milestones, and cheers Daniel on. |
 | **🌙 Circadian Rhythm Caretaker** | Sensory & Care | Tracks day/night cycles, monitors fatigue, provides morning briefings and late-night health care. |
