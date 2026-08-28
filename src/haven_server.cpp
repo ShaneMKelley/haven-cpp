@@ -101,6 +101,7 @@ private:
     bool running_;
     std::thread server_thread_;
     HavenEngine haven_engine_;
+    std::mutex engine_mutex_;
     bool model_loaded_;
 
     static std::string extract_json_string(const std::string& json, const std::string& key) {
@@ -380,6 +381,7 @@ private:
     }
 
     void handle_native_chat_completions(int client_sock, const std::string& request) {
+        std::lock_guard<std::mutex> lock(engine_mutex_);
         size_t body_pos = request.find("\r\n\r\n");
         std::string body = (body_pos != std::string::npos) ? request.substr(body_pos + 4) : request;
 
