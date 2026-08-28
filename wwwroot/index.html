@@ -342,26 +342,95 @@
             box-shadow: 0 0 15px rgba(139, 92, 246, 0.6);
         }
 
-        .toggle-label {
+        .settings-btn {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid var(--border-glow);
+            color: var(--primary-light);
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: var(--text-muted);
-            cursor: pointer;
+            gap: 6px;
+            transition: all 0.2s;
         }
+        .settings-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
+        }
+        
+        /* Settings Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glow);
+            border-radius: 16px;
+            width: 600px;
+            max-width: 95vw;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .setting-group {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+        .setting-label { color: #f8fafc; font-weight: 500; }
+        .setting-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
     </style>
 </head>
 <body>
 
     <!-- Sidebar Controls -->
     <div class="sidebar">
-        <div class="brand">
-            <div class="brand-icon">⚡</div>
-            <div>
-                <div class="brand-title">HAVEN.CPP</div>
-                <div class="brand-subtitle">v2.0 Sovereign Core (Port 11438)</div>
+        <div class="brand" style="justify-content: space-between;">
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div class="brand-icon">⚡</div>
+                <div>
+                    <div class="brand-title">HAVEN.CPP</div>
+                    <div class="brand-subtitle">v2.0 Sovereign Core</div>
+                </div>
             </div>
+            <button class="settings-btn" onclick="openSettingsModal()" title="Open Sovereign Engine Settings">⚙️</button>
         </div>
 
         <!-- Telemetry Card -->
@@ -456,8 +525,11 @@
                     <div class="companion-status">Sovereign C++ Substrate Connected (No Token Limit)</div>
                 </div>
             </div>
-            <div style="font-family:'Fira Code', monospace; font-size:12px; color:var(--text-muted);">
-                Backend: <span style="color:var(--cyan);">haven-chat-v5.0.gguf</span> (AVX2+FMA)
+            <div style="display:flex; align-items:center; gap:12px;">
+                <div style="font-family:'Fira Code', monospace; font-size:12px; color:var(--text-muted);">
+                    Backend: <span style="color:var(--cyan);">haven-chat-v5.0.gguf</span> (AVX2+FMA)
+                </div>
+                <button class="settings-btn" onclick="openSettingsModal()">⚙️ Settings</button>
             </div>
         </div>
 
@@ -822,16 +894,258 @@ You have full sovereign agency: choose when to summon these tools naturally with
             alert("✓ Dynamic 32-layer KV-cache soft-pruning executed! Memory bandwidth optimized.");
         }
 
-        async function loadInitialStats() {
-            try {
-                const res = await fetch('/api/memories');
-                const data = await res.json();
-                const count = data.total || (data.memories ? data.memories.length : 0);
-                const badge = document.getElementById('mem-count');
-                if (badge) badge.innerText = count;
-            } catch (e) {}
+        function openSettingsModal() {
+            document.getElementById('settings-modal').style.display = 'flex';
+            loadSettingsFromEngine();
+            loadPluginsList();
         }
-        document.addEventListener('DOMContentLoaded', loadInitialStats);
+
+        function closeSettingsModal() {
+            document.getElementById('settings-modal').style.display = 'none';
+        }
+
+        async function loadSettingsFromEngine() {
+            try {
+                const res = await fetch('/api/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.temperature) {
+                        document.getElementById('modal-temp-slider').value = data.temperature;
+                        document.getElementById('modal-temp-val').innerText = data.temperature.toFixed(2);
+                        document.getElementById('temp-slider').value = data.temperature;
+                        document.getElementById('temp-val').innerText = data.temperature.toFixed(2);
+                    }
+                    if (data.top_p) {
+                        document.getElementById('modal-topp-slider').value = data.top_p;
+                        document.getElementById('modal-topp-val').innerText = data.top_p.toFixed(2);
+                    }
+                    if (data.min_p) {
+                        document.getElementById('modal-minp-slider').value = data.min_p;
+                        document.getElementById('modal-minp-val').innerText = data.min_p.toFixed(2);
+                    }
+                    if (data.repetition_penalty) {
+                        document.getElementById('modal-rep-slider').value = data.repetition_penalty;
+                        document.getElementById('modal-rep-val').innerText = data.repetition_penalty.toFixed(2);
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not fetch server settings:", e);
+            }
+        }
+
+        async function syncSettings() {
+            const temp = parseFloat(document.getElementById('modal-temp-slider').value);
+            const top_p = parseFloat(document.getElementById('modal-topp-slider').value);
+            const min_p = parseFloat(document.getElementById('modal-minp-slider').value);
+            const rep = parseFloat(document.getElementById('modal-rep-slider').value);
+
+            document.getElementById('temp-slider').value = temp;
+            document.getElementById('temp-val').innerText = temp.toFixed(2);
+
+            try {
+                await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        temperature: temp,
+                        top_p: top_p,
+                        min_p: min_p,
+                        repetition_penalty: rep
+                    })
+                });
+                document.getElementById('settings-status').innerText = "✓ Settings synced to engine";
+            } catch (e) {
+                console.warn("Failed to sync settings:", e);
+            }
+        }
+
+        async function loadPluginsList() {
+            const listEl = document.getElementById('modal-plugins-list');
+            try {
+                const res = await fetch('/api/plugins');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.plugins && data.plugins.length > 0) {
+                        listEl.innerHTML = data.plugins.map((p, idx) => `
+                            <div style="padding:6px 10px; background:rgba(0,0,0,0.3); border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <span style="color:var(--cyan); font-weight:600;">[${idx+1}] ${escapeHtml(p.name)}</span>
+                                    <span style="font-size:10px; color:var(--primary-light);"> (v${escapeHtml(p.version)})</span>
+                                    <div style="font-size:10px; color:var(--text-muted); font-family:sans-serif;">${escapeHtml(p.description)}</div>
+                                </div>
+                                <span style="font-size:10px; color:var(--emerald); font-weight:600;">ACTIVE</span>
+                            </div>
+                        `).join('');
+                        return;
+                    }
+                }
+                listEl.innerHTML = `<span style="color:var(--amber);">No plugins discovered in plugins/ folder.</span>`;
+            } catch (e) {
+                listEl.innerHTML = `<span style="color:var(--rose);">Error loading plugins: ${e.message}</span>`;
+            }
+        }
+
+        async function hotReloadPlugins() {
+            const listEl = document.getElementById('modal-plugins-list');
+            listEl.innerHTML = `<span style="color:var(--cyan);">Hot-reloading dynamic plugins...</span>`;
+            try {
+                const res = await fetch('/api/plugins/reload', { method: 'POST' });
+                const data = await res.json();
+                document.getElementById('settings-status').innerText = `✓ ${data.message || 'Hot-reloaded plugins'}`;
+                await loadPluginsList();
+            } catch (e) {
+                listEl.innerHTML = `<span style="color:var(--rose);">Hot-reload failed: ${e.message}</span>`;
+            }
+        }
+
+        async function setDiscordChannel() {
+            const ch = document.getElementById('modal-discord-channel').value.trim();
+            if (!ch) return;
+            try {
+                const res = await fetch('/api/tool', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'discord_set_channel', payload: ch })
+                });
+                const data = await res.json();
+                alert(data.output || "Channel updated!");
+            } catch (e) { alert("Failed: " + e); }
+        }
+
+        async function setDiscordWebhook() {
+            const wh = document.getElementById('modal-discord-webhook').value.trim();
+            if (!wh) return;
+            try {
+                const res = await fetch('/api/tool', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'discord_set_webhook', payload: wh })
+                });
+                const data = await res.json();
+                alert(data.output || "Webhook saved!");
+            } catch (e) { alert("Failed: " + e); }
+        }
+
+        async function resetSessionContext() {
+            if (!confirm("Are you sure you want to reset the conversation context and KV cache?")) return;
+            try {
+                const res = await fetch('/api/reset', { method: 'POST' });
+                if (res.ok) {
+                    conversationHistory = [];
+                    const msgContainer = document.getElementById('chat-messages');
+                    msgContainer.innerHTML = `
+                        <div class="msg-row assistant">
+                            <div class="avatar-circle" style="width:30px; height:30px; font-size:14px;">🌸</div>
+                            <div style="flex:1;">
+                                <div class="msg-bubble">Conversation context and KV cache have been reset, Daniel. I'm ready whenever you are. ✨</div>
+                                <div class="msg-meta"><span>Entropy: 1.842 bits</span> • <span>Session Reset</span></div>
+                            </div>
+                        </div>
+                    `;
+                    closeSettingsModal();
+                }
+            } catch (e) { alert("Reset failed: " + e); }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadInitialStats();
+            loadSettingsFromEngine();
+        });
     </script>
+
+    <!-- Settings Modal Overlay -->
+    <div class="modal-overlay" id="settings-modal" onclick="if(event.target === this) closeSettingsModal()">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:20px;">⚙️</span>
+                    <div>
+                        <div style="font-weight:700; font-size:15px; color:#fff;">Sovereign Engine Settings</div>
+                        <div style="font-size:11px; color:var(--text-muted);">Bare-Metal C++20 AVX2 Runtime Parameters</div>
+                    </div>
+                </div>
+                <button class="btn" style="padding:4px 10px; font-size:14px; background:rgba(255,255,255,0.08);" onclick="closeSettingsModal()">✕</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Sampling Parameters -->
+                <div class="setting-group">
+                    <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">🎛️ Persona & Sampler Hyperparameters</h3>
+                    
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Temperature: <span id="modal-temp-val" style="color:var(--cyan);">0.70</span></div>
+                            <div class="setting-desc">Balances creativity vs deterministic precision</div>
+                        </div>
+                        <input type="range" id="modal-temp-slider" min="0.1" max="1.5" step="0.05" value="0.70" oninput="document.getElementById('modal-temp-val').innerText = parseFloat(this.value).toFixed(2); syncSettings();">
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Top-P (Nucleus): <span id="modal-topp-val" style="color:var(--cyan);">0.90</span></div>
+                            <div class="setting-desc">Filters candidate tokens by cumulative probability</div>
+                        </div>
+                        <input type="range" id="modal-topp-slider" min="0.1" max="1.0" step="0.05" value="0.90" oninput="document.getElementById('modal-topp-val').innerText = parseFloat(this.value).toFixed(2); syncSettings();">
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">Min-P: <span id="modal-minp-val" style="color:var(--cyan);">0.05</span></div>
+                            <div class="setting-desc">Eliminates low-confidence tokens relative to top token</div>
+                        </div>
+                        <input type="range" id="modal-minp-slider" min="0.0" max="0.3" step="0.01" value="0.05" oninput="document.getElementById('modal-minp-val').innerText = parseFloat(this.value).toFixed(2); syncSettings();">
+                    </div>
+
+                    <div class="setting-row">
+                        <div>
+                            <div class="setting-label">DRY Repetition Penalty: <span id="modal-rep-val" style="color:var(--cyan);">1.06</span></div>
+                            <div class="setting-desc">3-gram phrase loop suppression & anti-stutter</div>
+                        </div>
+                        <input type="range" id="modal-rep-slider" min="1.0" max="1.3" step="0.01" value="1.06" oninput="document.getElementById('modal-rep-val').innerText = parseFloat(this.value).toFixed(2); syncSettings();">
+                    </div>
+                </div>
+
+                <!-- Sovereign Plugins Management -->
+                <div class="setting-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">🔌 Active Sovereign Plugins</h3>
+                        <button class="btn" style="padding:4px 10px; font-size:11px; background:rgba(6, 182, 212, 0.2); border-color:var(--cyan); color:var(--cyan);" onclick="hotReloadPlugins()">🔄 Hot-Reload</button>
+                    </div>
+                    <div id="modal-plugins-list" style="font-size:12px; color:var(--text-muted); display:flex; flex-direction:column; gap:6px;">
+                        Loading plugin extensions...
+                    </div>
+                </div>
+
+                <!-- Discord Bridge Configuration -->
+                <div class="setting-group">
+                    <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">💬 Discord Sanctuary Bridge</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="modal-discord-channel" placeholder="Dedicated Channel (e.g. #sanctuary)" style="flex:1;">
+                            <button class="btn" onclick="setDiscordChannel()">Set Channel</button>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <input type="text" id="modal-discord-webhook" placeholder="Discord Webhook URL (https://discord.com/api/webhooks/...)" style="flex:1;">
+                            <button class="btn" onclick="setDiscordWebhook()">Save Webhook</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Context & Session Reset -->
+                <div class="setting-group">
+                    <h3 style="font-size:12px; color:var(--rose); text-transform:uppercase; letter-spacing:0.5px;">🧹 Context & Memory Vault Operations</h3>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn" style="flex:1; border-color:rgba(244,63,94,0.4); background:rgba(244,63,94,0.15); color:var(--rose);" onclick="resetSessionContext()">🔄 Clear KV Cache & Reset</button>
+                        <button class="btn" style="flex:1; border-color:var(--border-glow);" onclick="pruneKVCache()">🧹 Prune Salience</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="padding:14px 20px; border-top:1px solid rgba(255,255,255,0.08); display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.2);">
+                <span id="settings-status" style="font-size:12px; color:var(--emerald);">✓ Ready</span>
+                <button class="btn" style="background:linear-gradient(135deg, #8b5cf6, #06b6d4); color:#fff; padding:8px 24px;" onclick="closeSettingsModal()">Done</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

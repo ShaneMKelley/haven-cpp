@@ -749,9 +749,61 @@ private:
                              + std::to_string(json.length()) + "\r\n\r\n" + json;
             send(sock, resp.c_str(), (int)resp.length(), 0);
         }
-        else if (path == "/v1/images/generations" || path == "/api/generate_image" || path == "/txt2img") {
-            // Forward Stable Diffusion image prompt to SD C++ server on port 8085
-            forward_to_backend(sock, request, 8085);
+        else if (path == "/api/plugins/reload") {
+            size_t reloaded = haven_engine_.get_plugin_manager().reload_all("plugins");
+            if (reloaded == 0) reloaded = haven_engine_.get_plugin_manager().reload_all("C:\\Users\\admin\\source\\haven-cpp\\plugins");
+            std::string json = "{\"ok\":true,\"reloaded\":" + std::to_string(reloaded) + ",\"message\":\"Hot-reloaded " + std::to_string(reloaded) + " plugins.\"}";
+            std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
+                             + std::to_string(json.length()) + "\r\n\r\n" + json;
+            send(sock, resp.c_str(), (int)resp.length(), 0);
+        }
+        else if (path == "/api/reset") {
+            haven_engine_.get_kv_cache().reset();
+            std::string json = "{\"ok\":true,\"message\":\"KV Cache and conversation context reset.\"}";
+            std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
+                             + std::to_string(json.length()) + "\r\n\r\n" + json;
+            send(sock, resp.c_str(), (int)resp.length(), 0);
+        }
+        else if (path == "/api/tool") {
+            std::string action = extract_json_string(request, "action");
+            std::string payload = extract_json_string(request, "payload");
+            std::string output;
+            bool ok = haven_engine_.get_plugin_manager().dispatch_tool_execution(action, payload, output);
+            std::string json = "{\"ok\":" + std::string(ok ? "true" : "false") + ",\"action\":\"" + escape_json_string(action) + "\",\"output\":\"" + escape_json_string(output) + "\"}";
+            std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
+                             + std::to_string(json.length()) + "\r\n\r\n" + json;
+            send(sock, resp.c_str(), (int)resp.length(), 0);
+        }
+        else if (path == "/api/settings") {
+            if (method == "POST") {
+                // Update sampler parameters
+                std::string temp_str = extract_json_string(request, "temperature");
+                if (!temp_str.empty()) try { haven_engine_.get_sampler().get_params().temperature = std::stof(temp_str); } catch (...) {}
+                
+                std::string top_p_str = extract_json_string(request, "top_p");
+                if (!top_p_str.empty()) try { haven_engine_.get_sampler().get_params().top_p = std::stof(top_p_str); } catch (...) {}
+
+                std::string top_k_str = extract_json_string(request, "top_k");
+                if (!top_k_str.empty()) try { haven_engine_.get_sampler().get_params().top_k = std::stoi(top_k_str); } catch (...) {}
+
+                std::string min_p_str = extract_json_string(request, "min_p");
+                if (!min_p_str.empty()) try { haven_engine_.get_sampler().get_params().min_p = std::stof(min_p_str); } catch (...) {}
+
+                std::string rep_str = extract_json_string(request, "repetition_penalty");
+                if (!rep_str.empty()) try { haven_engine_.get_sampler().get_params().repetition_penalty = std::stof(rep_str); } catch (...) {}
+            }
+
+            const auto& p = haven_engine_.get_sampler().get_params();
+            std::string json = "{\"ok\":true,\"temperature\":" + std::to_string(p.temperature)
+                             + ",\"top_p\":" + std::to_string(p.top_p)
+                             + ",\"top_k\":" + std::to_string(p.top_k)
+                             + ",\"min_p\":" + std::to_string(p.min_p)
+                             + ",\"repetition_penalty\":" + std::to_string(p.repetition_penalty)
+                             + ",\"model\":\"haven-chat-v5.0.gguf\""
+                             + ",\"plugins_count\":" + std::to_string(haven_engine_.get_plugin_manager().get_plugin_count()) + "}";
+            std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
+                             + std::to_string(json.length()) + "\r\n\r\n" + json;
+            send(sock, resp.c_str(), (int)resp.length(), 0);
         }
         else {
             // Check for static file in wwwroot
