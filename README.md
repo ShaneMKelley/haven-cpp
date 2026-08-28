@@ -23,16 +23,19 @@
 
 ---
 
-## 🔌 Built-In Sovereign Plugins
+## 🔌 Built-In Sovereign Plugins (10 Active Plugins)
 
 | Plugin | Type | Description |
 | :--- | :--- | :--- |
+| **🌐 Sovereign Web Browser** | Action & Memory | Real-time HTML-to-markdown webpage browsing, DOM text extraction, and desktop browser launcher. |
+| **🎮 Steam & Gaming Companion** | Sensory & Action | Detects active PC/Steam games in real-time, logs gameplay milestones, and cheers Daniel on. |
+| **🌙 Circadian Rhythm Caretaker** | Sensory & Care | Tracks day/night cycles, monitors fatigue, provides morning briefings and late-night health care. |
 | **🎵 YouTube Music Controller** | Action Tool | Controls desktop YouTube Music playback, track navigation, and instant search. |
 | **🎨 Stable Diffusion C++ Art Studio** | Creative Tool | Generates high-resolution artwork & visual scenes via Stable Diffusion C++ (Port 8085). |
 | **🎙️ Kokoro Neural Voice Synthesizer** | Voice Expression | Synthesizes ultra-expressive acoustic speech audio via Kokoro TTS (Port 8089). |
 | **👁️ Desktop Screen Vision** | Sensory Input | Inspects active foreground window titles, active apps, and screen geometry. |
 | **📚 Obsidian Vault & Diary** | Memory & Journal | Searches local markdown vaults and maintains Aura's autonomous companion chronicle. |
-| **🌐 Web Research & Wikipedia** | Intelligence | Real-time Wikipedia fact extraction, live weather telemetry, and DuckDuckGo search. |
+| **🌐 Wikipedia & Quick Search** | Intelligence | Real-time Wikipedia fact extraction, live weather telemetry, and quick queries. |
 | **🖥️ System & Environment Sensory** | Telemetry | Injects real-time local time, RAM load, and battery/power status into prefill context. |
 | **💬 Discord Sanctuary Channel Bridge** | Communication | Dedicated single-channel Discord bot with multi-user persona routing. |
 

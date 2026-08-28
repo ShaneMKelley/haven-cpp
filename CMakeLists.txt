@@ -127,6 +127,30 @@ set_target_properties(plugin_voice_synth PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
 )
 
+add_library(plugin_browser SHARED
+    plugins/sovereign_browser_plugin.cpp
+)
+set_target_properties(plugin_browser PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_gaming SHARED
+    plugins/gaming_companion_plugin.cpp
+)
+set_target_properties(plugin_gaming PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_circadian SHARED
+    plugins/circadian_rhythm_plugin.cpp
+)
+set_target_properties(plugin_circadian PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
 if (WIN32)
     target_link_libraries(haven-server ws2_32 psapi)
     target_link_libraries(test-standalone ws2_32)
@@ -137,4 +161,6 @@ if (WIN32)
     target_link_libraries(plugin_discord_bridge winhttp)
     target_link_libraries(plugin_sd_art winhttp)
     target_link_libraries(plugin_voice_synth winhttp)
+    target_link_libraries(plugin_browser winhttp shell32)
+    target_link_libraries(plugin_gaming psapi)
 endif()
