@@ -1,7 +1,8 @@
-﻿#include "haven/haven_sampler.h"
+#include "haven/haven_sampler.h"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <unordered_set>
 
 namespace haven {
 
@@ -25,14 +26,40 @@ uint32_t PersonaSampler::sample(
     const float* token_embeddings,
     int embedding_dim)
 {
-    // 1. Repetition Penalty
-    if (params_.repetition_penalty > 1.0f) {
-        for (uint32_t prev_token : recent_tokens) {
-            if (prev_token < vocab_size) {
-                if (logits[prev_token] > 0.0f) {
-                    logits[prev_token] /= params_.repetition_penalty;
-                } else {
-                    logits[prev_token] *= params_.repetition_penalty;
+    // 0. Greedy Argmax path for deterministic generation
+    if (params_.temperature <= 0.05f) {
+        uint32_t best_token = 0;
+        float best_logit = logits[0];
+        for (uint32_t i = 1; i < vocab_size; ++i) {
+            if (logits[i] > best_logit) {
+                best_logit = logits[i];
+                best_token = i;
+            }
+        }
+        return best_token;
+    }
+
+    // 1. Intelligent N-Gram & Anti-Stutter Filtering (DRY)
+    if (!recent_tokens.empty()) {
+        const size_t n_tokens = recent_tokens.size();
+        uint32_t last_token = recent_tokens.back();
+
+        // 1a. Consecutive Word Stutter Suppression (skip single-char & formatting tokens < 256)
+        if (last_token < vocab_size && last_token > 256) {
+            logits[last_token] -= 1.5f;
+        }
+
+        // 1b. 3-gram and 2-gram Phrase Repetition Suppression
+        if (n_tokens >= 2) {
+            uint32_t prev1 = recent_tokens[n_tokens - 1];
+            uint32_t prev2 = recent_tokens[n_tokens - 2];
+
+            for (size_t i = 0; i + 2 < n_tokens; ++i) {
+                if (recent_tokens[i] == prev2 && recent_tokens[i + 1] == prev1) {
+                    uint32_t repeated_follower = recent_tokens[i + 2];
+                    if (repeated_follower < vocab_size) {
+                        logits[repeated_follower] -= 3.0f; // Prevent 3-gram phrase loop
+                    }
                 }
             }
         }
@@ -62,11 +89,6 @@ uint32_t PersonaSampler::sample(
     }
 
     // 4. Softmax with Temperature
-    float inv_temp = 1.0f / std::max(0.01f, params_.temperature);
-    for (uint32_t i = 0; i < vocab_size; ++i) {
-        logits[i] *= inv_temp;
-    }
-
     float max_logit = -1e9f;
     for (uint32_t i = 0; i < vocab_size; ++i) {
         if (logits[i] > max_logit) max_logit = logits[i];
@@ -75,9 +97,10 @@ uint32_t PersonaSampler::sample(
     std::vector<std::pair<float, uint32_t>> probs;
     probs.reserve(vocab_size);
     float sum_exp = 0.0f;
+    float inv_temp = 1.0f / std::max(0.01f, params_.temperature);
 
     for (uint32_t i = 0; i < vocab_size; ++i) {
-        float p = std::exp(logits[i] - max_logit);
+        float p = std::exp((logits[i] - max_logit) * inv_temp);
         probs.push_back({p, i});
         sum_exp += p;
     }
@@ -86,17 +109,21 @@ uint32_t PersonaSampler::sample(
         item.first /= sum_exp;
     }
 
-    // 5. Min-P Filtering: Prune tokens below min_p * max_prob
+    // 5. Top-K, Top-P, and Min-P Joint Nucleus Filtering
     std::sort(probs.begin(), probs.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
     float top_prob = probs[0].first;
     float min_p_threshold = top_prob * params_.min_p;
 
     float filtered_sum = 0.0f;
     std::vector<std::pair<float, uint32_t>> candidates;
-    for (const auto& item : probs) {
-        if (item.first < min_p_threshold && candidates.size() >= 1) break;
+    int k_limit = params_.top_k > 0 ? params_.top_k : (int)probs.size();
+
+    for (int i = 0; i < (int)probs.size() && i < k_limit; ++i) {
+        const auto& item = probs[i];
+        if (item.first < min_p_threshold && !candidates.empty()) break;
         candidates.push_back(item);
         filtered_sum += item.first;
+        if (filtered_sum >= params_.top_p && !candidates.empty()) break;
     }
 
     // 6. Stochastic Categorical Sampling

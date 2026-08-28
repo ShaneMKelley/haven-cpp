@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "haven_types.h"
 #include <string>
@@ -20,6 +20,7 @@ public:
     const TensorDesc* get_tensor(const std::string& name) const;
     const std::vector<std::string>& get_vocabulary() const { return vocab_; }
 
+    const std::unordered_map<std::string, TensorDesc>& get_tensors() const { return tensors_; }
     size_t get_tensor_count() const { return tensors_.size(); }
     size_t get_file_size() const { return file_size_; }
 

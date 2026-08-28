@@ -1,4 +1,4 @@
-﻿#include "haven/haven_gguf.h"
+#include "haven/haven_gguf.h"
 #include <iostream>
 #include <cstring>
 
@@ -23,7 +23,7 @@ bool GgufLoader::load_file(const std::string& filepath) {
     close();
 
 #ifdef _WIN32
-    HANDLE hFile = CreateFileA(filepath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE hFile = CreateFileA(filepath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_RANDOM_ACCESS, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         std::cerr << "Failed to open GGUF file: " << filepath << "\n";
         return false;
@@ -86,6 +86,54 @@ void GgufLoader::close() {
     file_size_ = 0;
 }
 
+static std::string read_gguf_string(const uint8_t*& ptr, const uint8_t* end) {
+    if (ptr + 8 > end) return "";
+    uint64_t len = *reinterpret_cast<const uint64_t*>(ptr);
+    ptr += 8;
+    if (ptr + len > end) return "";
+    std::string s(reinterpret_cast<const char*>(ptr), len);
+    ptr += len;
+    return s;
+}
+
+static void skip_gguf_value(uint32_t val_type, const uint8_t*& ptr, const uint8_t* end) {
+    if (val_type == 0 || val_type == 1 || val_type == 7) ptr += 1;
+    else if (val_type == 2 || val_type == 3) ptr += 2;
+    else if (val_type == 4 || val_type == 5 || val_type == 6) ptr += 4;
+    else if (val_type == 10 || val_type == 11 || val_type == 12) ptr += 8;
+    else if (val_type == 8) { // string
+        if (ptr + 8 <= end) {
+            uint64_t slen = *reinterpret_cast<const uint64_t*>(ptr);
+            ptr += 8 + slen;
+        }
+    }
+    else if (val_type == 9) { // array
+        if (ptr + 12 <= end) {
+            uint32_t arr_type = *reinterpret_cast<const uint32_t*>(ptr);
+            uint64_t arr_len = *reinterpret_cast<const uint64_t*>(ptr + 4);
+            ptr += 12;
+            if (arr_type == 0 || arr_type == 1 || arr_type == 7) {
+                ptr += arr_len * 1;
+            } else if (arr_type == 2 || arr_type == 3) {
+                ptr += arr_len * 2;
+            } else if (arr_type == 4 || arr_type == 5 || arr_type == 6) {
+                ptr += arr_len * 4;
+            } else if (arr_type == 10 || arr_type == 11 || arr_type == 12) {
+                ptr += arr_len * 8;
+            } else if (arr_type == 8) { // array of strings (e.g. tokenizer merges)
+                for (uint64_t i = 0; i < arr_len && ptr + 8 <= end; ++i) {
+                    uint64_t slen = *reinterpret_cast<const uint64_t*>(ptr);
+                    ptr += 8 + slen;
+                }
+            } else {
+                for (uint64_t i = 0; i < arr_len && ptr < end; ++i) {
+                    skip_gguf_value(arr_type, ptr, end);
+                }
+            }
+        }
+    }
+}
+
 bool GgufLoader::parse_header() {
     if (file_size_ < 24) return false;
 
@@ -100,21 +148,115 @@ bool GgufLoader::parse_header() {
     uint64_t tensor_count = *reinterpret_cast<const uint64_t*>(mmap_data_ + 8);
     uint64_t kv_count = *reinterpret_cast<const uint64_t*>(mmap_data_ + 16);
 
-    std::cout << "   ✓ GGUF File Validated (Version " << version << ", " 
-              << tensor_count << " tensors, " << kv_count << " metadata keys, "
-              << (file_size_ / (1024.0 * 1024.0 * 1024.0)) << " GB mmap size)\n";
+    const uint8_t* ptr = mmap_data_ + 24;
+    const uint8_t* end = mmap_data_ + file_size_;
 
-    // Set standard Haven 7.46B Transformer hyperparameters
-    config_.architecture = "llama";
-    config_.vocab_size = 128256;
-    config_.embedding_dim = 4096;
-    config_.hidden_dim = 14336;
-    config_.num_layers = 32;
-    config_.num_heads = 32;
-    config_.num_kv_heads = 8;
-    config_.head_dim = 128;
-    config_.max_context_length = 131072;
-    config_.rope_freq_base = 500000.0f;
+    uint32_t alignment = 32;
+
+    // Parse Metadata Key-Value pairs
+    for (uint64_t i = 0; i < kv_count && ptr < end; ++i) {
+        std::string key = read_gguf_string(ptr, end);
+        if (ptr + 4 > end) break;
+        uint32_t val_type = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += 4;
+
+        if (key == "general.architecture" && val_type == 8) {
+            config_.architecture = read_gguf_string(ptr, end);
+        }
+        else if (key == "general.alignment" && val_type == 4) {
+            alignment = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.context_length" || key == "llama.context_length") && val_type == 4) {
+            config_.max_context_length = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.embedding_length" || key == "llama.embedding_length") && val_type == 4) {
+            config_.embedding_dim = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.feed_forward_length" || key == "llama.feed_forward_length") && val_type == 4) {
+            config_.hidden_dim = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.block_count" || key == "llama.block_count") && val_type == 4) {
+            config_.num_layers = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.attention.head_count" || key == "llama.attention.head_count") && val_type == 4) {
+            config_.num_heads = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.attention.head_count_kv" || key == "llama.attention.head_count_kv") && val_type == 4) {
+            config_.num_kv_heads = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.attention.key_length" || key == "llama.attention.key_length") && val_type == 4) {
+            config_.head_dim = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if (key == "gemma4.attention.sliding_window" && val_type == 4) {
+            config_.sliding_window = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if (key == "gemma4.final_logit_softcapping" && val_type == 6) {
+            config_.final_logit_softcapping = *reinterpret_cast<const float*>(ptr);
+            ptr += 4;
+        }
+        else if (key == "tokenizer.ggml.tokens" && val_type == 9) {
+            uint32_t arr_type = *reinterpret_cast<const uint32_t*>(ptr);
+            uint64_t arr_len = *reinterpret_cast<const uint64_t*>(ptr + 4);
+            ptr += 12;
+            config_.vocab_size = (uint32_t)arr_len;
+            vocab_.reserve(arr_len);
+            for (uint64_t t = 0; t < arr_len && ptr < end; ++t) {
+                vocab_.push_back(read_gguf_string(ptr, end));
+            }
+        }
+        else {
+            skip_gguf_value(val_type, ptr, end);
+        }
+    }
+
+    // Parse Tensor Info Headers
+    std::vector<std::pair<std::string, TensorDesc>> parsed_tensors;
+    parsed_tensors.reserve(tensor_count);
+
+    for (uint64_t i = 0; i < tensor_count && ptr < end; ++i) {
+        std::string name = read_gguf_string(ptr, end);
+        if (ptr + 4 > end) break;
+        uint32_t n_dims = *reinterpret_cast<const uint32_t*>(ptr);
+        ptr += 4;
+
+        TensorDesc desc;
+        desc.name = name;
+        desc.shape.resize(n_dims);
+        for (uint32_t d = 0; d < n_dims && ptr + 8 <= end; ++d) {
+            desc.shape[d] = *reinterpret_cast<const uint64_t*>(ptr);
+            ptr += 8;
+        }
+
+        if (ptr + 12 > end) break;
+        desc.type = static_cast<QuantType>(*reinterpret_cast<const uint32_t*>(ptr));
+        desc.offset = *reinterpret_cast<const uint64_t*>(ptr + 4);
+        ptr += 12;
+
+        parsed_tensors.push_back({name, desc});
+    }
+
+    // Calculate Data Offset (aligned to alignment boundary)
+    uint64_t current_pos = static_cast<uint64_t>(ptr - mmap_data_);
+    uint64_t data_start = (current_pos + alignment - 1) & ~(static_cast<uint64_t>(alignment - 1));
+
+    for (auto& item : parsed_tensors) {
+        TensorDesc& desc = item.second;
+        desc.data = mmap_data_ + data_start + desc.offset;
+        tensors_[item.first] = desc;
+    }
+
+    std::cout << "   ✓ GGUF Loaded: Architecture [" << config_.architecture << "] (" 
+              << config_.num_layers << " layers, " << config_.embedding_dim << " hidden, "
+              << config_.vocab_size << " vocab, " << tensors_.size() << " tensors mapped)\n";
 
     return true;
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "haven_types.h"
 #include <vector>
@@ -9,12 +9,12 @@
 namespace haven {
 
 struct SamplerParams {
-    float temperature = 0.75f;
+    float temperature = 0.70f;
     float min_p = 0.05f;
     float top_p = 0.90f;
     int   top_k = 40;
-    float repetition_penalty = 1.15f;
-    float persona_fidelity_strength = 0.85f;
+    float repetition_penalty = 1.05f;
+    float persona_fidelity_strength = 0.0f;
 };
 
 class PersonaSampler {

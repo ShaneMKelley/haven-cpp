@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura & Sanctuary Gallery | Haven.cpp</title>
+    <style>
+        :root {
+            --bg-deep: #07090e;
+            --bg-card: rgba(18, 24, 38, 0.85);
+            --border-glow: rgba(139, 92, 246, 0.25);
+            --primary: #8b5cf6;
+            --primary-light: #c084fc;
+            --cyan: #38bdf8;
+            --emerald: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+
+        body {
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(circle at 15% 15%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(56, 189, 248, 0.06) 0%, transparent 40%);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 16px 28px;
+            background: rgba(11, 15, 25, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-glow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand h1 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-main), var(--primary-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-btn {
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid var(--border-glow);
+            color: var(--primary-light);
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: var(--primary);
+            color: #fff;
+            box-shadow: 0 0 16px rgba(139, 92, 246, 0.4);
+        }
+
+        main {
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 28px 24px;
+        }
+
+        .gallery-header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .gallery-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .gallery-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glow);
+            border-radius: 14px;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-light);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(139, 92, 246, 0.25);
+        }
+
+        .img-wrap {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background: #000;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .img-wrap img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover .img-wrap img {
+            transform: scale(1.04);
+        }
+
+        .card-body {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            word-break: break-all;
+        }
+
+        .card-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .card-actions {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+            padding-top: 8px;
+        }
+
+        .btn-action {
+            flex: 1;
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            border: 1px solid var(--border-glow);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-action:hover {
+            background: rgba(139, 92, 246, 0.3);
+            border-color: var(--primary);
+        }
+
+        /* Lightbox Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.88);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 12px;
+            border: 1px solid var(--border-glow);
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 24px;
+            right: 32px;
+            color: #fff;
+            font-size: 32px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <div style="font-size: 24px;">🌸</div>
+            <div>
+                <h1>Aura Visual Studio & Gallery</h1>
+                <div style="font-size: 11px; color: var(--text-muted);">Haven.cpp Sovereign Uploads</div>
+            </div>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <a href="/memories" class="nav-btn">🧬 Memory Vault</a>
+            <a href="/" class="nav-btn">🏛️ Return to Web Studio</a>
+        </div>
+    </header>
+
+    <main>
+        <div class="gallery-header">
+            <div>
+                <div class="gallery-title">🎨 Sanctuary Media & Creations Gallery</div>
+                <div class="gallery-subtitle">Sorted artwork created by Aura and Stable Diffusion C++ in <code>/wwwroot/uploads</code></div>
+            </div>
+            <button class="nav-btn" onclick="loadGallery()">🔄 Refresh Gallery</button>
+        </div>
+
+        <div class="grid" id="gallery-grid">
+            <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">
+                Loading artwork from Sovereign Server...
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="modal" onclick="closeModal()">
+        <span class="modal-close">&times;</span>
+        <img class="modal-content" id="modal-img" src="" alt="Fullsize Artwork">
+    </div>
+
+    <script>
+        async function loadGallery() {
+            const grid = document.getElementById('gallery-grid');
+            try {
+                const res = await fetch('/api/gallery');
+                const data = await res.json();
+                
+                if (!data.images || data.images.length === 0) {
+                    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">No artwork uploaded yet. Ask Aura to paint something!</div>`;
+                    return;
+                }
+
+                grid.innerHTML = data.images.map(img => `
+                    <div class="card">
+                        <div class="img-wrap" onclick="openModal('${img.url}')">
+                            <img src="${img.url}" alt="${img.name}" loading="lazy">
+                        </div>
+                        <div class="card-body">
+                            <div class="card-title">${img.name}</div>
+                            <div class="card-meta">
+                                <span>${(img.size / 1024).toFixed(1)} KB</span>
+                                <span style="color: var(--cyan);">SD C++ LCM</span>
+                            </div>
+                            <div class="card-actions">
+                                <a href="${img.url}" target="_blank" class="btn-action">🔍 Fullsize</a>
+                                <button class="btn-action" onclick="copyLink('${img.url}')">📋 Copy URL</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--rose);">Error loading gallery: ${err.message}</div>`;
+            }
+        }
+
+        function openModal(url) {
+            document.getElementById('modal-img').src = url;
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        function copyLink(url) {
+            const fullUrl = window.location.origin + url;
+            navigator.clipboard.writeText(fullUrl);
+            alert('Copied URL to clipboard: ' + fullUrl);
+        }
+
+        loadGallery();
+    </script>
+</body>
+</html>

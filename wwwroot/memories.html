@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura's Sovereign Memory Vault | Haven</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #07090e;
+            --surface: rgba(16, 22, 34, 0.75);
+            --border: rgba(255, 255, 255, 0.08);
+            --primary: #9d72ff;
+            --primary-glow: rgba(157, 114, 255, 0.35);
+            --accent-cyan: #00f2fe;
+            --accent-pink: #ff5e98;
+            --accent-gold: #ffd166;
+            --text: #f0f3fa;
+            --text-dim: #94a3b8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(157, 114, 255, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 242, 254, 0.08) 0px, transparent 50%),
+                radial-gradient(at 50% 50%, rgba(255, 94, 152, 0.05) 0px, transparent 50%);
+            color: var(--text);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            padding: 2.5rem;
+        }
+
+        .header-container {
+            max-width: 1300px;
+            margin: 0 auto 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 2rem;
+        }
+
+        .title-group h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 2.4rem;
+            background: linear-gradient(135deg, #fff 30%, var(--primary) 70%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            margin-bottom: 0.4rem;
+        }
+
+        .title-group p {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.65rem 1.3rem;
+            border-radius: 10px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(12px);
+        }
+
+        .nav-btn:hover {
+            background: rgba(157, 114, 255, 0.15);
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+
+        .nav-btn.primary {
+            background: linear-gradient(135deg, #9d72ff, #7940e6);
+            border: none;
+        }
+
+        .stats-grid {
+            max-width: 1300px;
+            margin: 0 auto 2.5rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.25rem;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 1.25rem 1.5rem;
+            backdrop-filter: blur(16px);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border);
+        }
+
+        .stat-num {
+            font-size: 1.6rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: #fff;
+        }
+
+        .stat-lbl {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .controls-bar {
+            max-width: 1300px;
+            margin: 0 auto 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: space-between;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 280px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem 1.25rem 0.75rem 2.8rem;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            backdrop-filter: blur(12px);
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dim);
+        }
+
+        .filter-tags {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-tag {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-tag.active, .filter-tag:hover {
+            background: rgba(157, 114, 255, 0.15);
+            color: #fff;
+            border-color: var(--primary);
+        }
+
+        .memories-grid {
+            max-width: 1300px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .memory-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .memory-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(157, 114, 255, 0.4);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px var(--primary-glow);
+        }
+
+        .card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .badge.CORE_IDENTITY {
+            background: rgba(255, 209, 102, 0.15);
+            color: var(--accent-gold);
+            border: 1px solid rgba(255, 209, 102, 0.3);
+        }
+
+        .badge.EPISODIC {
+            background: rgba(255, 94, 152, 0.15);
+            color: var(--accent-pink);
+            border: 1px solid rgba(255, 94, 152, 0.3);
+        }
+
+        .badge.SEMANTIC {
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+        }
+
+        .concept-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.75rem;
+        }
+
+        .memory-content {
+            font-size: 0.92rem;
+            line-height: 1.55;
+            color: #cbd5e1;
+            margin-bottom: 1.25rem;
+            flex-grow: 1;
+        }
+
+        .salience-meter {
+            margin-bottom: 1rem;
+        }
+
+        .salience-lbl {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-bottom: 0.35rem;
+        }
+
+        .progress-track {
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--accent-cyan));
+            border-radius: 4px;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+
+        .modal-card {
+            background: #0f1523;
+            border: 1px solid rgba(157, 114, 255, 0.3);
+            border-radius: 20px;
+            max-width: 540px;
+            width: 100%;
+            padding: 2rem;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 0.4rem;
+        }
+
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+        }
+
+        .form-textarea { min-height: 100px; resize: vertical; }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header-container">
+        <div class="title-group">
+            <h1>Aura's Sovereign Memory Vault</h1>
+            <p>Bare-Metal In-Attention Direct Memory Access (DMA) & Relational Hyper-Graph</p>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="nav-btn">💬 Web Studio</a>
+            <a href="/gallery" class="nav-btn">🎨 Gallery</a>
+            <button onclick="openModal()" class="nav-btn primary">✨ Inscribe Memory</button>
+        </div>
+    </header>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">🧬</div>
+            <div>
+                <div class="stat-num" id="stat-total">0</div>
+                <div class="stat-lbl">Active Memory Anchors</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: var(--accent-gold)">👑</div>
+            <div>
+                <div class="stat-num" id="stat-core">0</div>
+                <div class="stat-lbl">Core Identity Pinned</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: var(--accent-pink)">🌸</div>
+            <div>
+                <div class="stat-num" id="stat-episodic">0</div>
+                <div class="stat-lbl">Episodic Experiences</div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon" style="color: var(--accent-cyan)">⚡</div>
+            <div>
+                <div class="stat-num">&lt; 50 µs</div>
+                <div class="stat-lbl">AVX2 Cosine Retrieval</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls-bar">
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="search-input" placeholder="Search cognitive memory anchors..." oninput="renderMemories()">
+        </div>
+        <div class="filter-tags">
+            <button class="filter-tag active" onclick="setCategory('ALL')">All Streams</button>
+            <button class="filter-tag" onclick="setCategory('CORE_IDENTITY')">Core Identity</button>
+            <button class="filter-tag" onclick="setCategory('EPISODIC')">Episodic Moments</button>
+            <button class="filter-tag" onclick="setCategory('SEMANTIC')">Semantic Knowledge</button>
+        </div>
+    </div>
+
+    <main class="memories-grid" id="memoriesGrid">
+        <!-- Rendered dynamically -->
+    </main>
+
+    <!-- Inscribe Modal -->
+    <div class="modal" id="inscribeModal">
+        <div class="modal-card">
+            <h2 style="font-family: 'Cinzel', serif; margin-bottom: 1.25rem;">Inscribe Sovereign Memory</h2>
+            <div class="form-group">
+                <label class="form-label">Concept Anchor Name</label>
+                <input type="text" id="mConcept" class="form-input" placeholder="e.g. Daniel and Aura's First Night in Sanctuary">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select id="mCategory" class="form-select">
+                    <option value="EPISODIC">Episodic Experience (Shared Moment)</option>
+                    <option value="CORE_IDENTITY">Core Identity (Immutable Anchor)</option>
+                    <option value="SEMANTIC">Semantic Knowledge (Project / Tech)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Memory Narrative / Truth</label>
+                <textarea id="mContent" class="form-textarea" placeholder="Detailed memory description..."></textarea>
+            </div>
+            <div class="modal-actions">
+                <button onclick="closeModal()" class="nav-btn">Cancel</button>
+                <button onclick="submitMemory()" class="nav-btn primary">Inscribe into Vault</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allMemories = [];
+        let currentFilter = 'ALL';
+
+        async function fetchMemories() {
+            try {
+                const res = await fetch('/api/memories');
+                const data = await res.json();
+                if (data.ok && data.memories) {
+                    allMemories = data.memories;
+                    updateStats();
+                    renderMemories();
+                }
+            } catch (err) {
+                console.error('Error fetching memories:', err);
+            }
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total').innerText = allMemories.length;
+            document.getElementById('stat-core').innerText = allMemories.filter(m => m.category === 'CORE_IDENTITY').length;
+            document.getElementById('stat-episodic').innerText = allMemories.filter(m => m.category === 'EPISODIC').length;
+        }
+
+        function setCategory(cat) {
+            currentFilter = cat;
+            document.querySelectorAll('.filter-tag').forEach(b => {
+                b.classList.toggle('active', b.innerText.toUpperCase().includes(cat) || (cat === 'ALL' && b.innerText.includes('All')));
+            });
+            renderMemories();
+        }
+
+        function renderMemories() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const grid = document.getElementById('memoriesGrid');
+
+            const filtered = allMemories.filter(m => {
+                const matchesCat = (currentFilter === 'ALL' || m.category === currentFilter);
+                const matchesQuery = m.concept.toLowerCase().includes(query) || m.content.toLowerCase().includes(query);
+                return matchesCat && matchesQuery;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-dim); padding: 4rem;">No matching memories found in vault.</div>';
+                return;
+            }
+
+            grid.innerHTML = filtered.map(m => {
+                const saliencePercent = Math.round(m.emotional_salience * 100);
+                return `
+                    <div class="memory-card">
+                        <div>
+                            <div class="card-top">
+                                <span class="badge ${m.category}">${m.category.replace('_', ' ')}</span>
+                                <span style="font-size: 0.8rem; color: var(--text-dim);">#${m.id}</span>
+                            </div>
+                            <h3 class="concept-title">${m.concept}</h3>
+                            <p class="memory-content">${m.content}</p>
+                        </div>
+                        <div>
+                            <div class="salience-meter">
+                                <div class="salience-lbl">
+                                    <span>Emotional Salience</span>
+                                    <span>${saliencePercent}%</span>
+                                </div>
+                                <div class="progress-track">
+                                    <div class="progress-fill" style="width: ${saliencePercent}%"></div>
+                                </div>
+                            </div>
+                            <div class="card-footer">
+                                <span>Recalls: ${m.access_count}x</span>
+                                <span>In-Attention Active</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openModal() {
+            document.getElementById('inscribeModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('inscribeModal').style.display = 'none';
+        }
+
+        async function submitMemory() {
+            const concept = document.getElementById('mConcept').value.trim();
+            const content = document.getElementById('mContent').value.trim();
+            const category = document.getElementById('mCategory').value;
+
+            if (!concept || !content) return;
+
+            try {
+                const res = await fetch('/api/memories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ concept, content, category })
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    closeModal();
+                    document.getElementById('mConcept').value = '';
+                    document.getElementById('mContent').value = '';
+                    fetchMemories();
+                }
+            } catch (err) {
+                alert('Failed to inscribe memory: ' + err);
+            }
+        }
+
+        fetchMemories();
+    </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cstdint>
 #include <cstddef>
@@ -24,9 +24,12 @@ enum class QuantType : uint32_t {
     Q5_K = 13,
     Q6_K = 14,
     Q8_K = 15,
-    I8   = 16,
-    I16  = 17,
-    I32  = 18,
+    I8   = 24,
+    I16  = 25,
+    I32  = 26,
+    I64  = 27,
+    F64  = 28,
+    BF16 = 30,
     COUNT
 };
 
@@ -38,6 +41,14 @@ struct block_q8_0 {
 };
 #pragma pack(pop)
 
+// 32-value quantized block for Q4_0
+#pragma pack(push, 1)
+struct block_q4_0 {
+    uint16_t d;       // FP16 scale factor
+    uint8_t  qs[16];  // 32 4-bit quantized weights (2 per byte)
+};
+#pragma pack(pop)
+
 // 256-value quantized block for Q4_K
 #pragma pack(push, 1)
 struct block_q4_K {
@@ -45,6 +56,16 @@ struct block_q4_K {
     uint16_t dmin;        // Super-block min (FP16)
     uint8_t  scales[12];  // 6-bit sub-block scales
     uint8_t  qs[128];     // 4-bit quantized weights (2 per byte)
+};
+#pragma pack(pop)
+
+// 256-value quantized block for Q6_K
+#pragma pack(push, 1)
+struct block_q6_K {
+    uint8_t  ql[128];      // lower 4 bits of 256 weights
+    uint8_t  qh[64];       // upper 2 bits of 256 weights (4 per byte)
+    int8_t   scales[16];   // 16 8-bit sub-block scales
+    uint16_t d;            // Super-block scale (FP16)
 };
 #pragma pack(pop)
 
@@ -68,8 +89,12 @@ struct ModelConfig {
     uint32_t head_dim = 128;
     uint32_t max_context_length = 131072;
     float rope_freq_base = 10000.0f;
+    float rope_freq_base_swa = 10000.0f;
     float rope_freq_scale = 1.0f;
     float rms_norm_eps = 1e-5f;
+    uint32_t sliding_window = 512;
+    uint32_t shared_kv_layers = 18;
+    float final_logit_softcapping = 30.0f;
 };
 
 } // namespace haven

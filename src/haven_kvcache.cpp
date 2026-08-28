@@ -1,4 +1,4 @@
-﻿#include "haven/haven_kvcache.h"
+#include "haven/haven_kvcache.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -18,29 +18,64 @@ DynamicKVCacheManager::DynamicKVCacheManager(
       head_dim_(head_dim),
       pruning_threshold_(pruning_threshold),
       salience_decay_(salience_decay),
-      current_length_(0)
+      current_length_(0),
+      capacity_(std::min(4096u, max_context_length))
 {
+    reinit(num_layers_, max_context_length_, num_kv_heads_, head_dim_);
+}
+
+void DynamicKVCacheManager::reinit(
+    uint32_t num_layers,
+    uint32_t max_context_length,
+    uint32_t num_kv_heads,
+    uint32_t head_dim)
+{
+    num_layers_ = num_layers;
+    max_context_length_ = max_context_length;
+    num_kv_heads_ = num_kv_heads;
+    head_dim_ = head_dim;
+    current_length_ = 0;
+    capacity_ = std::min(4096u, max_context_length_);
+
+    layers_.clear();
     layers_.resize(num_layers_);
-    const size_t layer_stride = (size_t)max_context_length_ * num_kv_heads_ * head_dim_;
+    const size_t initial_stride = (size_t)capacity_ * (num_kv_heads_ * head_dim_);
 
     for (uint32_t l = 0; l < num_layers_; ++l) {
-        layers_[l].keys.resize(layer_stride, 0.0f);
-        layers_[l].values.resize(layer_stride, 0.0f);
-        layers_[l].salience_scores.resize(max_context_length_, 1.0f);
-        layers_[l].active_mask.resize(max_context_length_, true);
+        layers_[l].keys.resize(initial_stride, 0.0f);
+        layers_[l].values.resize(initial_stride, 0.0f);
+        layers_[l].salience_scores.resize(capacity_, 1.0f);
+        layers_[l].active_mask.resize(capacity_, true);
         layers_[l].current_len = 0;
     }
 }
 
-void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* v) {
+void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* v, uint32_t kv_dim) {
     if (layer >= num_layers_ || current_length_ >= (int)max_context_length_) return;
 
-    auto& lay = layers_[layer];
-    const size_t offset = (size_t)current_length_ * num_kv_heads_ * head_dim_;
-    const size_t num_bytes = num_kv_heads_ * head_dim_ * sizeof(float);
+    // Dynamically grow capacity if needed
+    if ((uint32_t)current_length_ >= capacity_) {
+        uint32_t new_cap = std::min(max_context_length_, capacity_ * 2);
+        if (new_cap > capacity_) {
+            capacity_ = new_cap;
+            const size_t new_stride = (size_t)capacity_ * (num_kv_heads_ * head_dim_);
+            for (uint32_t l = 0; l < num_layers_; ++l) {
+                layers_[l].keys.resize(new_stride, 0.0f);
+                layers_[l].values.resize(new_stride, 0.0f);
+                layers_[l].salience_scores.resize(capacity_, 1.0f);
+                layers_[l].active_mask.resize(capacity_, true);
+            }
+        }
+    }
 
-    std::memcpy(lay.keys.data() + offset, k, num_bytes);
-    std::memcpy(lay.values.data() + offset, v, num_bytes);
+    auto& lay = layers_[layer];
+    const size_t offset = (size_t)current_length_ * kv_dim;
+    const size_t num_bytes = kv_dim * sizeof(float);
+
+    if (offset + kv_dim <= lay.keys.size()) {
+        std::memcpy(lay.keys.data() + offset, k, num_bytes);
+        std::memcpy(lay.values.data() + offset, v, num_bytes);
+    }
 
     lay.salience_scores[current_length_] = 1.0f; // New token starts with full salience
     lay.active_mask[current_length_] = true;

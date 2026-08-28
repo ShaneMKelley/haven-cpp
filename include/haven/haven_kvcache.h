@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "haven_types.h"
 #include <vector>
@@ -28,7 +28,7 @@ public:
     );
 
     // Appends new K and V vectors for the given layer at the current position
-    void append(uint32_t layer, const float* k, const float* v);
+    void append(uint32_t layer, const float* k, const float* v, uint32_t kv_dim = 1024);
 
     // Updates token salience scores based on attention weights: salience = decay * salience + attn_weight
     void update_salience(uint32_t layer, const float* attention_weights, int seq_len);
@@ -45,6 +45,7 @@ public:
     int get_current_length() const { return current_length_; }
     void advance_position() { current_length_++; }
     void reset();
+    void reinit(uint32_t num_layers, uint32_t max_context_length, uint32_t num_kv_heads, uint32_t head_dim);
 
     float get_pruning_threshold() const { return pruning_threshold_; }
     void set_pruning_threshold(float t) { pruning_threshold_ = t; }
@@ -57,6 +58,7 @@ private:
     float pruning_threshold_;
     float salience_decay_;
     int current_length_ = 0;
+    uint32_t capacity_ = 2048;
 
     std::vector<GatedKVCacheLayer> layers_;
 };
