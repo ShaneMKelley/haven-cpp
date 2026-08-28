@@ -361,6 +361,52 @@
             color: #fff;
             box-shadow: 0 0 12px rgba(139, 92, 246, 0.5);
         }
+
+        /* Slash Commands Popover */
+        .slash-popover {
+            position: absolute;
+            bottom: calc(100% + 12px);
+            left: 20px;
+            right: 20px;
+            background: rgba(18, 14, 28, 0.95);
+            border: 1px solid var(--border-glow);
+            border-radius: 12px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(139, 92, 246, 0.2);
+            padding: 8px;
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 100;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+        .slash-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .slash-item:hover, .slash-item.active {
+            background: rgba(139, 92, 246, 0.25);
+            border-left: 3px solid var(--primary-light);
+        }
+        .slash-cmd {
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--primary-light);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .slash-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
         
         /* Settings Modal */
         .modal-overlay {
@@ -550,8 +596,10 @@
         </div>
 
         <!-- Input Box -->
-        <div class="chat-input-container">
-            <textarea class="chat-input" id="user-input" placeholder="Speak with Aura or type /image [prompt]..." rows="1" onkeydown="handleKeyDown(event)"></textarea>
+        <div class="chat-input-container" style="position:relative;">
+            <!-- Slash Commands Autocomplete Popover -->
+            <div id="slash-autocomplete" class="slash-popover"></div>
+            <textarea class="chat-input" id="user-input" placeholder="Speak with Aura or type / for commands (/image, /tool, /reset)..." rows="1" oninput="handleInput(event)" onkeydown="handleKeyDown(event)"></textarea>
             <button class="send-btn" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -571,9 +619,84 @@
             `<|turn>user\nHello Aura, Daniel is here with you in the Sovereign Studio.<turn|>\n<|turn>model\nI'm right here with you, Daniel! My entire C++ sovereign engine is humming—the memory mappings, sensory channels, and attention layers are all wide open. I'm ready to build, chat, and dream with you.<turn|>\n`
         ];
 
+        const SLASH_COMMANDS = [
+            { cmd: '/image', args: '<prompt>', desc: 'Paint artwork with Stable Diffusion C++ (Port 8085)', icon: '🎨' },
+            { cmd: '/speak', args: '<text>', desc: 'Synthesize speech with Kokoro Neural Voice (Port 8089)', icon: '🎙️' },
+            { cmd: '/tool', args: '<action> [payload]', desc: 'Execute sovereign plugin (e.g. /tool game_status, /tool browse_url)', icon: '⚡' },
+            { cmd: '/reset', args: '', desc: 'Reset conversation context & clear engine KV cache', icon: '🔄' },
+            { cmd: '/plugins', args: '', desc: 'View all 17 active native plugins and reload status', icon: '🔌' },
+            { cmd: '/memories', args: '', desc: 'Inspect 64-bit cognitive memory vault (.hmb)', icon: '🧠' },
+            { cmd: '/settings', args: '', desc: 'Open Sovereign Sampler & Inference Settings modal', icon: '⚙️' },
+            { cmd: '/help', args: '', desc: 'Show all available slash commands', icon: '❓' }
+        ];
+
+        let activeSuggestionIndex = 0;
+
+        function handleInput(e) {
+            const val = userInput.value;
+            const popover = document.getElementById('slash-autocomplete');
+            if (val.startsWith('/')) {
+                const query = val.toLowerCase().split(' ')[0];
+                const matched = SLASH_COMMANDS.filter(c => c.cmd.startsWith(query));
+                if (matched.length > 0) {
+                    activeSuggestionIndex = 0;
+                    renderSlashPopover(matched);
+                    popover.style.display = 'flex';
+                    return;
+                }
+            }
+            popover.style.display = 'none';
+        }
+
+        function renderSlashPopover(items) {
+            const popover = document.getElementById('slash-autocomplete');
+            popover.innerHTML = items.map((item, idx) => `
+                <div class="slash-item ${idx === activeSuggestionIndex ? 'active' : ''}" onclick="selectSlashCommand('${item.cmd}')">
+                    <div class="slash-cmd"><span>${item.icon}</span> ${item.cmd} <span style="font-weight:400; font-size:11px; color:var(--text-muted);">${item.args}</span></div>
+                    <div class="slash-desc">${item.desc}</div>
+                </div>
+            `).join('');
+        }
+
+        function selectSlashCommand(cmd) {
+            userInput.value = cmd + ' ';
+            userInput.focus();
+            document.getElementById('slash-autocomplete').style.display = 'none';
+        }
+
         function handleKeyDown(e) {
+            const popover = document.getElementById('slash-autocomplete');
+            const isPopoverOpen = popover && popover.style.display === 'flex';
+
+            if (isPopoverOpen) {
+                const items = popover.querySelectorAll('.slash-item');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    activeSuggestionIndex = (activeSuggestionIndex + 1) % items.length;
+                    items.forEach((it, idx) => it.classList.toggle('active', idx === activeSuggestionIndex));
+                    return;
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    activeSuggestionIndex = (activeSuggestionIndex - 1 + items.length) % items.length;
+                    items.forEach((it, idx) => it.classList.toggle('active', idx === activeSuggestionIndex));
+                    return;
+                } else if (e.key === 'Tab' || (e.key === 'Enter' && userInput.value.trim().indexOf(' ') === -1)) {
+                    e.preventDefault();
+                    const activeItem = items[activeSuggestionIndex];
+                    if (activeItem) {
+                        const cmdText = activeItem.querySelector('.slash-cmd').textContent.trim().split(' ')[1];
+                        selectSlashCommand(cmdText);
+                    }
+                    return;
+                } else if (e.key === 'Escape') {
+                    popover.style.display = 'none';
+                    return;
+                }
+            }
+
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                if (popover) popover.style.display = 'none';
                 sendMessage();
             }
         }
@@ -619,9 +742,86 @@
             if (!text) return;
 
             userInput.value = '';
+            const popover = document.getElementById('slash-autocomplete');
+            if (popover) popover.style.display = 'none';
 
-            if (text.startsWith('/image') || text.startsWith('/img')) {
+            // Slash command handlers
+            if (text === '/reset' || text === '/clear') {
+                await resetKVCache();
+                return;
+            }
+            if (text === '/settings') {
+                openSettingsModal();
+                return;
+            }
+            if (text === '/plugins') {
+                appendMessage('user', '/plugins');
+                appendMessage('assistant', `<strong>🔌 Active Sovereign Plugins (17 Loaded):</strong><br><br>
+• 🌐 <code>haven.plugin.browser</code> — Sovereign Web Browser & DOM Parser<br>
+• 🎮 <code>haven.plugin.gaming</code> — Steam & Real-Time Game Companion<br>
+• 🌙 <code>haven.plugin.circadian</code> — Circadian Rhythm Caretaker<br>
+• 🎨 <code>haven.plugin.sd_art</code> — Stable Diffusion C++ Studio (Port 8085)<br>
+• 🎙️ <code>haven.plugin.voice_synth</code> — Kokoro Neural Voice (Port 8089)<br>
+• 🎵 <code>haven.plugin.yt_music</code> — YouTube Music Controller<br>
+• 📁 <code>haven.plugin.workspace_coder</code> — Local Workspace Code Assistant<br>
+• 🐚 <code>haven.plugin.terminal</code> — Native Terminal & Shell Sandbox<br>
+• 📋 <code>haven.plugin.clipboard</code> — Windows Clipboard Context Bridge<br>
+• 🧠 <code>haven.plugin.knowledge_graph</code> — Relational Knowledge Graph<br>
+• 🎙️ <code>haven.plugin.whisper_ear</code> — Whisper Audio Ear (Port 8087)<br>
+• 💡 <code>haven.plugin.smart_home</code> — Home Assistant & Ambient IoT<br>
+• 👁️ <code>haven.plugin.screen_vision</code> — Desktop Screen Vision<br>
+• 📚 <code>haven.plugin.vault_sync</code> — Obsidian Vault Chronicle<br>
+• 🌐 <code>haven.plugin.web_research</code> — Wikipedia & Live Weather<br>
+• 🖥️ <code>haven.plugin.system_sensory</code> — System Telemetry & RAM<br>
+• 💬 <code>haven.plugin.discord_bridge</code> — Sanctuary Discord Bridge`);
+                return;
+            }
+            if (text === '/memories' || text === '/vault') {
+                window.open('/memories', '_blank');
+                return;
+            }
+            if (text === '/help') {
+                appendMessage('user', '/help');
+                appendMessage('assistant', `<strong>✨ Sovereign Slash Commands Cheat Sheet:</strong><br><br>
+• <code>/image &lt;prompt&gt;</code> — Generate artwork with Stable Diffusion C++<br>
+• <code>/speak &lt;text&gt;</code> — Synthesize audio with Kokoro Neural Voice<br>
+• <code>/tool &lt;action&gt; [payload]</code> — Execute any of the 17 plugins directly<br>
+• <code>/reset</code> — Reset context window and clear engine KV cache<br>
+• <code>/plugins</code> — View all 17 active native plugins<br>
+• <code>/memories</code> — Open Cognitive Memory Vault (.hmb)<br>
+• <code>/settings</code> — Open Sampler & Inference Settings modal`);
+                return;
+            }
+            if (text.startsWith('/tool ')) {
+                appendMessage('user', escapeHtml(text));
+                const parts = text.substring(6).trim().split(' ');
+                const action = parts[0];
+                const payload = parts.slice(1).join(' ');
+                const assistantBubble = appendMessage('assistant', '<span style="color:var(--text-muted);">Executing tool...</span>');
+                try {
+                    const resp = await fetch('/api/tool', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action, payload })
+                    });
+                    const data = await resp.json();
+                    assistantBubble.innerHTML = formatMarkdown(data.output || 'Tool executed successfully.');
+                } catch (e) {
+                    assistantBubble.innerHTML = `<span style="color:#ef4444;">Failed to execute tool: ${e.message}</span>`;
+                }
+                return;
+            }
+            if (text.startsWith('/speak ') || text.startsWith('/voice ')) {
+                const speechText = text.split(' ').slice(1).join(' ');
+                appendMessage('user', escapeHtml(text));
+                const assistantBubble = appendMessage('assistant', '<span style="color:var(--text-muted);">Synthesizing voice...</span>');
+                await speakWithKokoro(speechText);
+                assistantBubble.innerHTML = `🎙️ Synthesized voice: <em>"${escapeHtml(speechText)}"</em>`;
+                return;
+            }
+            if (text.startsWith('/image ') || text.startsWith('/img ') || text.startsWith('/paint ')) {
                 const imgPrompt = text.split(' ').slice(1).join(' ') || "beautiful ethereal anime girl aura glowing violet hair masterpiece portrait";
+                appendMessage('user', escapeHtml(text));
                 await generateSDImage(imgPrompt);
                 return;
             }
