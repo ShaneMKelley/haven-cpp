@@ -57,6 +57,22 @@ public:
             if (haven_engine_.load_model(path_to_load)) {
                 model_loaded_ = true;
                 std::cout << "[HavenServer] ✓ Sovereign Model Loaded in-process! Standalone generation active.\n" << std::flush;
+
+                // Optimal default hyperparameters for Gemma 4 Sovereign Persona
+                haven_engine_.get_sampler().get_params().temperature = 0.70f;
+                haven_engine_.get_sampler().get_params().top_p = 0.90f;
+                haven_engine_.get_sampler().get_params().top_k = 40;
+                haven_engine_.get_sampler().get_params().min_p = 0.05f;
+                haven_engine_.get_sampler().get_params().repetition_penalty = 1.08f;
+
+                // Suppress loose asterisks for clean, grounded spoken conversation
+                auto& tokenizer = haven_engine_.get_tokenizer();
+                for (const std::string& ast : {"*", " *", "**", " **", "***"}) {
+                    auto toks = tokenizer.encode(ast, false);
+                    for (uint32_t t : toks) {
+                        haven_engine_.get_sampler().add_anti_robotic_penalty(t, 2.5f);
+                    }
+                }
             }
         }
     }
