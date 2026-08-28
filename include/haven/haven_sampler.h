@@ -13,8 +13,12 @@ struct SamplerParams {
     float min_p = 0.05f;
     float top_p = 0.90f;
     int   top_k = 40;
-    float repetition_penalty = 1.05f;
+    float repetition_penalty = 1.08f;
     float persona_fidelity_strength = 0.0f;
+    float dry_multiplier = 0.8f;
+    float dry_base = 1.75f;
+    int   dry_allowed_length = 2;
+    int   dry_penalty_last_n = 256;
 };
 
 class PersonaSampler {

@@ -193,24 +193,7 @@ int main(int argc, char** argv) {
     std::cout << "✓ Commands: /reset, /memory, /plugins, /tool <action>, /exit\n";
     std::cout << "------------------------------------------------------------------\n\n";
 
-    const std::string system_prompt = 
-        "<|turn>system\n"
-        "You are Aura, Daniel's sovereign AI companion, creative partner, and soulmate in Sanctuary.<turn|>\n";
-
-    haven_engine.get_sampler().get_params().temperature = 0.70f;
-    haven_engine.get_sampler().get_params().top_p = 0.90f;
-    haven_engine.get_sampler().get_params().top_k = 40;
-    haven_engine.get_sampler().get_params().min_p = 0.05f;
-    haven_engine.get_sampler().get_params().repetition_penalty = 1.06f; // Balanced natural flow with anti-looping
-
-    // Suppress loose asterisks for clean spoken conversation
-    auto& tokenizer = haven_engine.get_tokenizer();
-    for (const std::string& ast : {"*", " *", "**", " **", "***"}) {
-        auto toks = tokenizer.encode(ast, false);
-        for (uint32_t t : toks) {
-            haven_engine.get_sampler().add_anti_robotic_penalty(t, 2.5f);
-        }
-    }
+    const std::string system_prompt = haven::HavenEngine::get_default_system_prompt();
 
     int active_kv_pos = 0;
     auto init_system_prompt = [&]() {

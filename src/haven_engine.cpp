@@ -122,6 +122,25 @@ bool HavenEngine::load_model(const std::string& gguf_filepath) {
         plugin_manager_.discover_plugins("C:\\Users\\admin\\source\\haven-cpp\\plugins");
     }
 
+    // Initialize Universal Default Persona Sampler Configuration (Single Source of Truth across CLI & Server)
+    sampler_.get_params().temperature = 0.70f;
+    sampler_.get_params().top_p = 0.90f;
+    sampler_.get_params().top_k = 40;
+    sampler_.get_params().min_p = 0.05f;
+    sampler_.get_params().repetition_penalty = 1.08f;
+    sampler_.get_params().dry_multiplier = 0.8f;
+    sampler_.get_params().dry_base = 1.75f;
+    sampler_.get_params().dry_allowed_length = 2;
+    sampler_.get_params().dry_penalty_last_n = 256;
+
+    // Suppress loose asterisks for clean, grounded spoken conversation across all frontends
+    for (const std::string& ast : {"*", " *", "**", " **", "***", " ***"}) {
+        auto toks = tokenizer_.encode(ast, false);
+        for (uint32_t t : toks) {
+            sampler_.add_anti_robotic_penalty(t, 2.5f);
+        }
+    }
+
     return true;
 }
 
