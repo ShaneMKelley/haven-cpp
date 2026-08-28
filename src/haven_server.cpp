@@ -23,7 +23,7 @@ namespace haven {
 
 class HavenMicroServer {
 public:
-    HavenMicroServer(int port = 11438, const std::string& model_path = "")
+    HavenMicroServer(int port = 11436, const std::string& model_path = "")
         : port_(port), running_(false), model_loaded_(false)
     {
 #ifdef _WIN32
@@ -909,7 +909,7 @@ int main(int argc, char** argv) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 #endif
-    int port = 11438;
+    int port = 11436;
     if (argc > 1) {
         try {
             port = std::stoi(argv[1]);
