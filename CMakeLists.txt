@@ -111,12 +111,30 @@ set_target_properties(plugin_discord_bridge PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
 )
 
+add_library(plugin_sd_art SHARED
+    plugins/sd_vision_art_plugin.cpp
+)
+set_target_properties(plugin_sd_art PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
+add_library(plugin_voice_synth SHARED
+    plugins/voice_synthesis_plugin.cpp
+)
+set_target_properties(plugin_voice_synth PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+)
+
 if (WIN32)
-    target_link_libraries(haven-server ws2_32)
+    target_link_libraries(haven-server ws2_32 psapi)
     target_link_libraries(test-standalone ws2_32)
     target_link_libraries(test-quant ws2_32)
     target_link_libraries(plugin_system_sensory psapi)
     target_link_libraries(plugin_screen_vision psapi)
     target_link_libraries(plugin_web_research winhttp)
     target_link_libraries(plugin_discord_bridge winhttp)
+    target_link_libraries(plugin_sd_art winhttp)
+    target_link_libraries(plugin_voice_synth winhttp)
 endif()
