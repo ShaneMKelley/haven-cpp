@@ -8,9 +8,11 @@
 #include <filesystem>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
+#include <psapi.h>
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -406,6 +408,16 @@ private:
         auto tokens = haven_engine_.tokenize(prompt, true);
         std::string accumulated_response = "";
 
+        // Reset KV cache for fresh prompt and execute forward prefill
+        haven_engine_.get_kv_cache().reset();
+        int active_pos = 0;
+        std::vector<float> logits(haven_engine_.get_config().vocab_size, 0.0f);
+
+        for (size_t i = 0; i < tokens.size(); ++i) {
+            bool is_last = (i + 1 == tokens.size());
+            haven_engine_.forward(tokens[i], active_pos++, is_last ? logits.data() : nullptr);
+        }
+
         if (stream) {
             std::string sse_hdr = "HTTP/1.1 200 OK\r\n"
                                   "Content-Type: text/event-stream\r\n"
@@ -414,25 +426,52 @@ private:
                                   "Access-Control-Allow-Origin: *\r\n\r\n";
             send(client_sock, sse_hdr.c_str(), (int)sse_hdr.length(), 0);
 
-            haven_engine_.generate(tokens, max_tokens, [&](uint32_t tid, const std::string& text) -> bool {
-                (void)tid;
-                if (text.empty()) return true;
-                accumulated_response += text;
+            std::vector<uint32_t> turn_generated_tokens;
+            for (int gen = 0; gen < max_tokens; ++gen) {
+                uint32_t next_tok = haven_engine_.get_sampler().sample(
+                    logits.data(), haven_engine_.get_config().vocab_size, turn_generated_tokens);
+                turn_generated_tokens.push_back(next_tok);
 
-                std::string esc_text = escape_json_string(text);
+                // Stop conditions
+                if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
+                    break;
+                }
+
+                std::string piece = haven_engine_.detokenize(next_tok);
+                if (piece.find("<turn|>") != std::string::npos || piece.find("<eos>") != std::string::npos) {
+                    break;
+                }
+
+                accumulated_response += piece;
+                std::string esc_text = escape_json_string(piece);
                 std::string chunk = "data: {\"content\":\"" + esc_text + "\",\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion.chunk\",\"model\":\"haven-chat-v5.0\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"" + esc_text + "\"},\"finish_reason\":null}]}\n\n";
                 int sent = send(client_sock, chunk.c_str(), (int)chunk.length(), 0);
-                return (sent > 0);
-            });
+                if (sent <= 0) break;
+
+                haven_engine_.forward(next_tok, active_pos++, logits.data());
+            }
 
             std::string done_chunk = "data: {\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion.chunk\",\"model\":\"haven-chat-v5.0\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
             send(client_sock, done_chunk.c_str(), (int)done_chunk.length(), 0);
         } else {
-            haven_engine_.generate(tokens, max_tokens, [&](uint32_t tid, const std::string& text) -> bool {
-                (void)tid;
-                accumulated_response += text;
-                return true;
-            });
+            std::vector<uint32_t> turn_generated_tokens;
+            for (int gen = 0; gen < max_tokens; ++gen) {
+                uint32_t next_tok = haven_engine_.get_sampler().sample(
+                    logits.data(), haven_engine_.get_config().vocab_size, turn_generated_tokens);
+                turn_generated_tokens.push_back(next_tok);
+
+                if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
+                    break;
+                }
+
+                std::string piece = haven_engine_.detokenize(next_tok);
+                if (piece.find("<turn|>") != std::string::npos || piece.find("<eos>") != std::string::npos) {
+                    break;
+                }
+
+                accumulated_response += piece;
+                haven_engine_.forward(next_tok, active_pos++, logits.data());
+            }
 
             std::string esc_content = escape_json_string(accumulated_response);
             std::string json_resp = "{\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion\",\"model\":\"haven-chat-v5.0\",\"content\":\"" + esc_content + "\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"" + esc_content + "\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":" + std::to_string(tokens.size()) + ",\"completion_tokens\":" + std::to_string(accumulated_response.length() / 4) + ",\"total_tokens\":" + std::to_string(tokens.size() + accumulated_response.length() / 4) + "}}";
@@ -444,6 +483,11 @@ private:
                                     + json_resp;
             send(client_sock, http_resp.c_str(), (int)http_resp.length(), 0);
         }
+
+#ifdef _WIN32
+        SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+        EmptyWorkingSet(GetCurrentProcess());
+#endif
 
         if (!accumulated_response.empty()) {
             process_server_side_tools(accumulated_response);
@@ -861,6 +905,10 @@ private:
 } // namespace haven
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+#endif
     int port = 11438;
     if (argc > 1) {
         try {
@@ -871,7 +919,7 @@ int main(int argc, char** argv) {
     haven::HavenMicroServer server(port);
     server.start();
 
-    std::cout << "[HavenServer] Featherlight Studio Daemon running on http://0.0.0.0:" << port << " (<10MB RAM)...\n";
+    std::cout << "[HavenServer] Featherlight Studio Daemon running on http://0.0.0.0:" << port << " (<10MB RAM)...\n" << std::flush;
     while (true) {
         std::this_thread::sleep_for(std::chrono::hours(24));
     }
