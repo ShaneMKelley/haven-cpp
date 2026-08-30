@@ -102,6 +102,7 @@ private:
     std::thread server_thread_;
     HavenEngine haven_engine_;
     std::mutex engine_mutex_;
+    std::vector<uint32_t> cached_tokens_;
     bool model_loaded_;
 
     static std::string extract_json_string(const std::string& json, const std::string& key) {
@@ -430,15 +431,27 @@ private:
 
         std::string accumulated_response = "";
 
-        // Reset KV cache for fresh prompt and execute forward prefill
-        haven_engine_.get_kv_cache().reset();
-        int active_pos = 0;
+        // Prefix KV Caching: Reuse already computed KV states for prefix tokens
+        size_t common_prefix = 0;
+        while (common_prefix < cached_tokens_.size() && 
+               common_prefix < tokens.size() && 
+               cached_tokens_[common_prefix] == tokens[common_prefix]) {
+            common_prefix++;
+        }
+
+        int active_pos = (int)common_prefix;
+        if (common_prefix == 0) {
+            haven_engine_.get_kv_cache().reset();
+        }
+
         std::vector<float> logits(haven_engine_.get_config().vocab_size, 0.0f);
 
-        for (size_t i = 0; i < tokens.size(); ++i) {
+        for (size_t i = common_prefix; i < tokens.size(); ++i) {
             bool is_last = (i + 1 == tokens.size());
             haven_engine_.forward(tokens[i], active_pos++, is_last ? logits.data() : nullptr);
         }
+
+        cached_tokens_ = tokens;
 
         std::vector<uint32_t> context_history;
         size_t start_h = (tokens.size() > 64) ? (tokens.size() - 64) : 0;
@@ -458,6 +471,7 @@ private:
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
                     logits.data(), haven_engine_.get_config().vocab_size, context_history);
                 context_history.push_back(next_tok);
+                cached_tokens_.push_back(next_tok);
 
                 // Stop conditions
                 if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
@@ -485,6 +499,7 @@ private:
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
                     logits.data(), haven_engine_.get_config().vocab_size, context_history);
                 context_history.push_back(next_tok);
+                cached_tokens_.push_back(next_tok);
 
                 if (next_tok == haven_engine_.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
                     break;
@@ -828,7 +843,9 @@ private:
             send(sock, resp.c_str(), (int)resp.length(), 0);
         }
         else if (path == "/api/reset") {
+            std::lock_guard<std::mutex> lock(engine_mutex_);
             haven_engine_.get_kv_cache().reset();
+            cached_tokens_.clear();
             std::string json = "{\"ok\":true,\"message\":\"KV Cache and conversation context reset.\"}";
             std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
                              + std::to_string(json.length()) + "\r\n\r\n" + json;
