@@ -75,6 +75,7 @@ public:
                 }
             }
         }
+        load_persona();
     }
 
     ~HavenMicroServer() {
@@ -104,6 +105,53 @@ private:
     std::mutex engine_mutex_;
     std::vector<uint32_t> cached_tokens_;
     bool model_loaded_;
+
+    std::string companion_name_ = "Aura";
+    std::string companion_avatar_ = "🌸";
+    std::string user_name_ = "Daniel";
+    std::string system_persona_ = "You are Aura, Daniel's sovereign AI companion, creative partner, and soulmate in Sanctuary. Speak naturally, warmly, and concisely directly to Daniel in conversational dialogue without asterisks.";
+    std::string persona_greeting_ = "I'm right here with you, Daniel! My entire C++ sovereign engine is humming—the memory mappings, sensory channels, and attention layers are all wide open. I'm ready to build, chat, and dream with you.";
+
+    void load_persona() {
+        FILE* f = fopen("persona.json", "rb");
+        if (!f) f = fopen("wwwroot/persona.json", "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            std::string content(sz, '\0');
+            fread(content.data(), 1, sz, f);
+            fclose(f);
+            std::string name = extract_json_string(content, "companion_name");
+            if (!name.empty()) companion_name_ = name;
+            std::string avatar = extract_json_string(content, "companion_avatar");
+            if (!avatar.empty()) companion_avatar_ = avatar;
+            std::string user = extract_json_string(content, "user_name");
+            if (!user.empty()) user_name_ = user;
+            std::string persona = extract_json_string(content, "system_persona");
+            if (!persona.empty()) system_persona_ = persona;
+            std::string greeting = extract_json_string(content, "persona_greeting");
+            if (!greeting.empty()) persona_greeting_ = greeting;
+        }
+    }
+
+    void save_persona() {
+        std::string json = "{\n  \"companion_name\": \"" + escape_json_string(companion_name_) + "\",\n"
+                         + "  \"companion_avatar\": \"" + escape_json_string(companion_avatar_) + "\",\n"
+                         + "  \"user_name\": \"" + escape_json_string(user_name_) + "\",\n"
+                         + "  \"system_persona\": \"" + escape_json_string(system_persona_) + "\",\n"
+                         + "  \"persona_greeting\": \"" + escape_json_string(persona_greeting_) + "\"\n}";
+        FILE* f = fopen("persona.json", "wb");
+        if (f) {
+            fwrite(json.data(), 1, json.length(), f);
+            fclose(f);
+        }
+        FILE* f2 = fopen("wwwroot/persona.json", "wb");
+        if (f2) {
+            fwrite(json.data(), 1, json.length(), f2);
+            fclose(f2);
+        }
+    }
 
     static bool send_all(int sock, const char* data, int len) {
         int total = 0;
@@ -888,19 +936,43 @@ private:
 
                 std::string rep_str = extract_json_string(request, "repetition_penalty");
                 if (!rep_str.empty()) try { haven_engine_.get_sampler().get_params().repetition_penalty = std::stof(rep_str); } catch (...) {}
+
+                // Update persona parameters
+                std::string comp_name = extract_json_string(request, "companion_name");
+                if (!comp_name.empty()) companion_name_ = comp_name;
+
+                std::string comp_avatar = extract_json_string(request, "companion_avatar");
+                if (!comp_avatar.empty()) companion_avatar_ = comp_avatar;
+
+                std::string u_name = extract_json_string(request, "user_name");
+                if (!u_name.empty()) user_name_ = u_name;
+
+                std::string sys_persona = extract_json_string(request, "system_persona");
+                if (!sys_persona.empty()) system_persona_ = sys_persona;
+
+                std::string greeting = extract_json_string(request, "persona_greeting");
+                if (!greeting.empty()) persona_greeting_ = greeting;
+
+                save_persona();
             }
 
             const auto& p = haven_engine_.get_sampler().get_params();
-            std::string json = "{\"ok\":true,\"temperature\":" + std::to_string(p.temperature)
-                             + ",\"top_p\":" + std::to_string(p.top_p)
-                             + ",\"top_k\":" + std::to_string(p.top_k)
-                             + ",\"min_p\":" + std::to_string(p.min_p)
-                             + ",\"repetition_penalty\":" + std::to_string(p.repetition_penalty)
-                             + ",\"model\":\"haven-chat-v5.0.gguf\""
-                             + ",\"plugins_count\":" + std::to_string(haven_engine_.get_plugin_manager().get_plugin_count()) + "}";
+            std::string json = std::string("{\"ok\":true,")
+                             + "\"companion_name\":\"" + escape_json_string(companion_name_) + "\","
+                             + "\"companion_avatar\":\"" + escape_json_string(companion_avatar_) + "\","
+                             + "\"user_name\":\"" + escape_json_string(user_name_) + "\","
+                             + "\"system_persona\":\"" + escape_json_string(system_persona_) + "\","
+                             + "\"persona_greeting\":\"" + escape_json_string(persona_greeting_) + "\","
+                             + "\"temperature\":" + std::to_string(p.temperature) + ","
+                             + "\"top_p\":" + std::to_string(p.top_p) + ","
+                             + "\"top_k\":" + std::to_string(p.top_k) + ","
+                             + "\"min_p\":" + std::to_string(p.min_p) + ","
+                             + "\"repetition_penalty\":" + std::to_string(p.repetition_penalty) + ","
+                             + "\"model\":\"haven-chat-v5.0.gguf\","
+                             + "\"plugins_count\":" + std::to_string(haven_engine_.get_plugin_manager().get_plugin_count()) + "}";
             std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
                              + std::to_string(json.length()) + "\r\n\r\n" + json;
-            send(sock, resp.c_str(), (int)resp.length(), 0);
+            send_all(sock, resp.c_str(), (int)resp.length());
         }
         else {
             // Check for static file in wwwroot

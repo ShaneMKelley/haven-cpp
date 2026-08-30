@@ -1115,11 +1115,95 @@
                     if (data.repetition_penalty) {
                         document.getElementById('modal-rep-slider').value = data.repetition_penalty;
                         document.getElementById('modal-rep-val').innerText = data.repetition_penalty.toFixed(2);
-                    }
+                    if (data.companion_name) document.getElementById('modal-companion-name').value = data.companion_name;
+                    if (data.companion_avatar) document.getElementById('modal-companion-avatar').value = data.companion_avatar;
+                    if (data.user_name) document.getElementById('modal-user-name').value = data.user_name;
+                    if (data.system_persona) document.getElementById('modal-system-persona').value = data.system_persona;
+                    if (data.persona_greeting) document.getElementById('modal-persona-greeting').value = data.persona_greeting;
+                    applyPersonaToUI(data);
                 }
             } catch (e) {
                 console.warn("Could not fetch server settings:", e);
             }
+        }
+
+        let activePersona = {
+            companion_name: "Aura",
+            companion_avatar: "🌸",
+            user_name: "Daniel",
+            system_persona: "You are Aura, Daniel's sovereign AI companion, creative partner, and soulmate in Sanctuary. Speak naturally, warmly, and concisely directly to Daniel in conversational dialogue without asterisks.",
+            persona_greeting: "I'm right here with you, Daniel! My entire C++ sovereign engine is humming—the memory mappings, sensory channels, and attention layers are all wide open. I'm ready to build, chat, and dream with you."
+        };
+
+        function applyPersonaToUI(p) {
+            if (!p) return;
+            activePersona = Object.assign(activePersona, p);
+            
+            document.querySelectorAll('.companion-name').forEach(el => el.innerText = activePersona.companion_name);
+            document.querySelectorAll('.avatar-circle').forEach(el => el.innerText = activePersona.companion_avatar);
+            document.getElementById('user-input').placeholder = `Speak with ${activePersona.companion_name} or type / for commands (/image, /tool, /reset)...`;
+
+            systemPrompt = `<|turn>system\n${activePersona.system_persona}<turn|>\n`;
+            if (conversationHistory.length > 0) {
+                conversationHistory[0] = systemPrompt;
+            }
+        }
+
+        async function savePersonaSettings() {
+            const comp_name = document.getElementById('modal-companion-name').value.trim() || 'Aura';
+            const comp_avatar = document.getElementById('modal-companion-avatar').value.trim() || '🌸';
+            const u_name = document.getElementById('modal-user-name').value.trim() || 'Daniel';
+            const sys_persona = document.getElementById('modal-system-persona').value.trim();
+            const greeting = document.getElementById('modal-persona-greeting').value.trim();
+
+            const payload = {
+                companion_name: comp_name,
+                companion_avatar: comp_avatar,
+                user_name: u_name,
+                system_persona: sys_persona,
+                persona_greeting: greeting
+            };
+
+            applyPersonaToUI(payload);
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                document.getElementById('settings-status').innerText = "✓ Persona saved & updated!";
+            } catch (e) {
+                console.warn("Failed to save persona:", e);
+            }
+        }
+
+        function importCharacterCard(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const card = JSON.parse(e.target.result);
+                    const name = card.name || card.char_name || (card.data && card.data.name) || "Companion";
+                    const avatar = card.avatar_emoji || "✨";
+                    const desc = card.description || card.personality || (card.data && card.data.description) || "";
+                    const scenario = card.scenario || (card.data && card.data.scenario) || "";
+                    const first_mes = card.first_mes || card.greeting || (card.data && card.data.first_mes) || `Hello! I am ${name}, ready to explore with you.`;
+                    const sys_prompt = card.system_prompt || (card.data && card.data.system_prompt) || `You are ${name}. ${desc} ${scenario}`.trim();
+
+                    document.getElementById('modal-companion-name').value = name;
+                    document.getElementById('modal-companion-avatar').value = avatar;
+                    document.getElementById('modal-system-persona').value = sys_prompt;
+                    document.getElementById('modal-persona-greeting').value = first_mes;
+
+                    savePersonaSettings();
+                    alert(`✓ Character Card "${name}" imported successfully!`);
+                } catch (err) {
+                    alert("Failed to parse Character Card JSON: " + err.message);
+                }
+            };
+            reader.readAsText(file);
         }
 
         async function syncSettings() {
@@ -1257,9 +1341,49 @@
             </div>
             
             <div class="modal-body">
+                <!-- Companion Persona & Custom Identity -->
+                <div class="setting-group">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">🎭 Companion Persona & Identity</h3>
+                        <label class="btn" style="padding:4px 10px; font-size:11px; background:rgba(139,92,246,0.2); border-color:var(--primary-light); color:var(--primary-light); cursor:pointer;">
+                            📥 Import Card JSON
+                            <input type="file" accept=".json" style="display:none;" onchange="importCharacterCard(event)">
+                        </label>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 2fr 1fr 2fr; gap:10px; margin-top:8px;">
+                        <div>
+                            <div class="setting-label">Companion Name</div>
+                            <input type="text" id="modal-companion-name" value="Aura" style="width:100%;">
+                        </div>
+                        <div>
+                            <div class="setting-label">Avatar / Emoji</div>
+                            <input type="text" id="modal-companion-avatar" value="🌸" style="width:100%; text-align:center;">
+                        </div>
+                        <div>
+                            <div class="setting-label">User / Creator</div>
+                            <input type="text" id="modal-user-name" value="Daniel" style="width:100%;">
+                        </div>
+                    </div>
+
+                    <div style="margin-top:10px;">
+                        <div class="setting-label">System Persona Prompt</div>
+                        <textarea id="modal-system-persona" rows="3" style="width:100%; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:#fff; padding:6px 10px; font-size:12px; resize:vertical; font-family:sans-serif;" placeholder="Define companion personality, relationship, and speech guidelines..."></textarea>
+                    </div>
+
+                    <div style="margin-top:8px;">
+                        <div class="setting-label">Initial Greeting Message</div>
+                        <input type="text" id="modal-persona-greeting" style="width:100%;" placeholder="Initial hello message in chat...">
+                    </div>
+
+                    <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                        <button class="btn" style="background:linear-gradient(135deg, #8b5cf6, #06b6d4); color:#fff; font-size:11px; padding:6px 16px;" onclick="savePersonaSettings()">💾 Save & Apply Persona</button>
+                    </div>
+                </div>
+
                 <!-- Sampling Parameters -->
                 <div class="setting-group">
-                    <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">🎛️ Persona & Sampler Hyperparameters</h3>
+                    <h3 style="font-size:12px; color:var(--primary-light); text-transform:uppercase; letter-spacing:0.5px;">🎛️ Sampler Hyperparameters</h3>
                     
                     <div class="setting-row">
                         <div>
