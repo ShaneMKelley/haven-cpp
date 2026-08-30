@@ -338,6 +338,9 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
 
         // 2e. Multi-Head Attention (GQA) with Parallel Head Execution
         const int seq_len = std::min(pos + 1, (int)cfg.max_context_length);
+        const int s_start = is_swa ? std::max(0, seq_len - 512) : 0;
+        const int active_attn_len = seq_len - s_start;
+
         const float* layer_k = kv_cache_.get_layer(kv_source_layer).keys.data();
         const float* layer_v = kv_cache_.get_layer(kv_source_layer).values.data();
 
@@ -349,30 +352,28 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
             const uint32_t kv_head_idx = h / gqa_ratio;
             float* scores = attn_scores_scratch_.data() + h * cfg.max_context_length;
 
-            // Compute QK^T with Sliding Window causal mask and Softcapping
-            for (int s = 0; s < seq_len; ++s) {
-                if (is_swa && s < (seq_len - 512)) {
-                    scores[s] = -1e9f;
-                } else {
-                    const float* k_s = layer_k + s * kv_dim + kv_head_idx * actual_head_dim;
-                    float dot = 0.0f;
-                    for (int d = 0; d < actual_head_dim; ++d) {
-                        dot += q_h[d] * k_s[d];
-                    }
-                    scores[s] = dot * attn_scale;
-                    scores[s] = 50.0f * std::tanh(scores[s] / 50.0f);
+            // Compute QK^T over active window with Softcapping
+            for (int s = 0; s < active_attn_len; ++s) {
+                int abs_s = s_start + s;
+                const float* k_s = layer_k + abs_s * kv_dim + kv_head_idx * actual_head_dim;
+                float dot = 0.0f;
+                for (int d = 0; d < actual_head_dim; ++d) {
+                    dot += q_h[d] * k_s[d];
                 }
+                scores[s] = dot * attn_scale;
+                scores[s] = 50.0f * std::tanh(scores[s] / 50.0f);
             }
 
-            // Pure Raw Attention Softmax
-            Avx2Math::softmax(scores, seq_len);
+            // Pure Raw Attention Softmax over active window
+            Avx2Math::softmax(scores, active_attn_len);
 
-            // Weighted Value Accumulation (Attn @ V)
+            // Weighted Value Accumulation (Attn @ V) over active window
             float* out_h = attn_heads_out.data() + h * actual_head_dim;
             for (int d = 0; d < actual_head_dim; ++d) {
                 float acc = 0.0f;
-                for (int s = 0; s < seq_len; ++s) {
-                    const float* v_s = layer_v + s * kv_dim + kv_head_idx * actual_head_dim;
+                for (int s = 0; s < active_attn_len; ++s) {
+                    int abs_s = s_start + s;
+                    const float* v_s = layer_v + abs_s * kv_dim + kv_head_idx * actual_head_dim;
                     acc += scores[s] * v_s[d];
                 }
                 out_h[d] = acc;
