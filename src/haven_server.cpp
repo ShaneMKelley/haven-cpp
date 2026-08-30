@@ -105,6 +105,16 @@ private:
     std::vector<uint32_t> cached_tokens_;
     bool model_loaded_;
 
+    static bool send_all(int sock, const char* data, int len) {
+        int total = 0;
+        while (total < len) {
+            int sent = send(sock, data + total, len - total, 0);
+            if (sent <= 0) return false;
+            total += sent;
+        }
+        return true;
+    }
+
     static std::string extract_json_string(const std::string& json, const std::string& key) {
         std::string search = "\"" + key + "\":";
         size_t pos = json.find(search);
@@ -465,7 +475,7 @@ private:
                                   "Cache-Control: no-cache\r\n"
                                   "Connection: keep-alive\r\n"
                                   "Access-Control-Allow-Origin: *\r\n\r\n";
-            send(client_sock, sse_hdr.c_str(), (int)sse_hdr.length(), 0);
+            send_all(client_sock, sse_hdr.c_str(), (int)sse_hdr.length());
 
             for (int gen = 0; gen < max_tokens; ++gen) {
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
@@ -486,14 +496,13 @@ private:
                 accumulated_response += piece;
                 std::string esc_text = escape_json_string(piece);
                 std::string chunk = "data: {\"content\":\"" + esc_text + "\",\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion.chunk\",\"model\":\"haven-chat-v5.0\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"" + esc_text + "\"},\"finish_reason\":null}]}\n\n";
-                int sent = send(client_sock, chunk.c_str(), (int)chunk.length(), 0);
-                if (sent <= 0) break;
+                if (!send_all(client_sock, chunk.c_str(), (int)chunk.length())) break;
 
                 haven_engine_.forward(next_tok, active_pos++, logits.data());
             }
 
             std::string done_chunk = "data: {\"id\":\"chatcmpl-haven-sovereign\",\"object\":\"chat.completion.chunk\",\"model\":\"haven-chat-v5.0\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
-            send(client_sock, done_chunk.c_str(), (int)done_chunk.length(), 0);
+            send_all(client_sock, done_chunk.c_str(), (int)done_chunk.length());
         } else {
             for (int gen = 0; gen < max_tokens; ++gen) {
                 uint32_t next_tok = haven_engine_.get_sampler().sample(
@@ -522,7 +531,7 @@ private:
                                     "Access-Control-Allow-Origin: *\r\n"
                                     "Content-Length: " + std::to_string(json_resp.length()) + "\r\n\r\n"
                                     + json_resp;
-            send(client_sock, http_resp.c_str(), (int)http_resp.length(), 0);
+            send_all(client_sock, http_resp.c_str(), (int)http_resp.length());
         }
 
 #ifdef _WIN32
