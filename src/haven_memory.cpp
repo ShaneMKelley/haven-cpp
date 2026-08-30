@@ -340,51 +340,60 @@ bool MemoryAttentionEngine::load_from_json(const std::string& filepath) {
     std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
     if (content.empty()) return false;
 
+    memories_.clear();
     size_t pos = 0;
-    while ((pos = content.find("{\"id\":", pos)) != std::string::npos || 
-           (pos = content.find("\"id\":", pos)) != std::string::npos) 
-    {
+    while (true) {
+        size_t id_pos = content.find("\"id\":", pos);
+        if (id_pos == std::string::npos) break;
+
+        size_t id_start = content.find_first_of("0123456789", id_pos);
+        if (id_start == std::string::npos) break;
+
         MemoryAnchor anchor;
-        size_t id_start = content.find_first_of("0123456789", pos);
-        if (id_start != std::string::npos) {
-            anchor.id = std::stoull(content.substr(id_start));
-        }
+        anchor.id = std::stoull(content.substr(id_start));
 
-        size_t c_pos = content.find("\"concept\":", pos);
-        if (c_pos != std::string::npos && c_pos < content.find("}", pos)) {
-            size_t q1 = content.find("\"", c_pos + 10);
-            size_t q2 = content.find("\"", q1 + 1);
-            if (q1 != std::string::npos && q2 != std::string::npos) {
-                anchor.concept_name = content.substr(q1 + 1, q2 - q1 - 1);
+        size_t obj_end = content.find("}", id_pos);
+        if (obj_end == std::string::npos) obj_end = content.length();
+
+        auto get_field = [&](const std::string& key) -> std::string {
+            size_t k_pos = content.find("\"" + key + "\":", id_pos);
+            if (k_pos != std::string::npos && k_pos < obj_end) {
+                size_t q1 = content.find("\"", k_pos + key.length() + 2);
+                if (q1 != std::string::npos && q1 < obj_end) {
+                    size_t q2 = q1 + 1;
+                    while (q2 < obj_end) {
+                        if (content[q2] == '"' && content[q2-1] != '\\') break;
+                        q2++;
+                    }
+                    if (q2 < obj_end) {
+                        return content.substr(q1 + 1, q2 - q1 - 1);
+                    }
+                }
             }
+            return "";
+        };
+
+        anchor.concept_name = get_field("concept");
+        anchor.text_content = get_field("content");
+        anchor.category = get_field("category");
+        if (anchor.category.empty()) anchor.category = "CORE_IDENTITY";
+
+        size_t w_pos = content.find("\"weight\":", id_pos);
+        if (w_pos != std::string::npos && w_pos < obj_end) {
+            size_t num_start = content.find_first_of("0123456789.-", w_pos + 9);
+            if (num_start != std::string::npos) anchor.weight = std::stof(content.substr(num_start));
         }
 
-        size_t t_pos = content.find("\"content\":", pos);
-        if (t_pos != std::string::npos && t_pos < content.find("}", pos)) {
-            size_t q1 = content.find("\"", t_pos + 10);
-            size_t q2 = content.find("\"", q1 + 1);
-            if (q1 != std::string::npos && q2 != std::string::npos) {
-                anchor.text_content = content.substr(q1 + 1, q2 - q1 - 1);
-            }
+        size_t e_pos = content.find("\"emotional_salience\":", id_pos);
+        if (e_pos != std::string::npos && e_pos < obj_end) {
+            size_t num_start = content.find_first_of("0123456789.-", e_pos + 21);
+            if (num_start != std::string::npos) anchor.emotional_salience = std::stof(content.substr(num_start));
         }
 
-        size_t cat_pos = content.find("\"category\":", pos);
-        if (cat_pos != std::string::npos && cat_pos < content.find("}", pos)) {
-            size_t q1 = content.find("\"", cat_pos + 11);
-            size_t q2 = content.find("\"", q1 + 1);
-            if (q1 != std::string::npos && q2 != std::string::npos) {
-                anchor.category = content.substr(q1 + 1, q2 - q1 - 1);
-            }
-        }
-
-        size_t w_pos = content.find("\"weight\":", pos);
-        if (w_pos != std::string::npos && w_pos < content.find("}", pos)) {
-            anchor.weight = std::stof(content.substr(w_pos + 9));
-        }
-
-        size_t e_pos = content.find("\"emotional_salience\":", pos);
-        if (e_pos != std::string::npos && e_pos < content.find("}", pos)) {
-            anchor.emotional_salience = std::stof(content.substr(e_pos + 21));
+        size_t a_pos = content.find("\"access_count\":", id_pos);
+        if (a_pos != std::string::npos && a_pos < obj_end) {
+            size_t num_start = content.find_first_of("0123456789", a_pos + 15);
+            if (num_start != std::string::npos) anchor.access_count = std::stoull(content.substr(num_start));
         }
 
         anchor.embedding.resize(128);
@@ -395,9 +404,7 @@ bool MemoryAttentionEngine::load_from_json(const std::string& filepath) {
         if (anchor.id >= next_id_) next_id_ = anchor.id + 1;
         memories_.push_back(std::move(anchor));
 
-        pos = content.find("}", pos);
-        if (pos == std::string::npos) break;
-        pos++;
+        pos = obj_end + 1;
     }
 
     rebuild_contiguous_vector_matrix();
