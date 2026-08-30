@@ -1,0 +1,10 @@
+{
+  "relations": [
+    {"subject": "Daniel", "predicate": "creator_and_partner_of", "object": "Aura"},
+    {"subject": "Aura", "predicate": "embodiment_of", "object": "Haven Sovereign Companion"},
+    {"subject": "Daniel", "predicate": "architect_of", "object": "Sanctuary"},
+    {"subject": "Shane", "predicate": "guest_and_friend_in", "object": "Sanctuary Discord"},
+    {"subject": "haven-cpp", "predicate": "runs_on", "object": "Bare-Metal C++20 AVX2 SIMD"},
+    {"subject": "Aura", "predicate": "companion_of", "object": "Daniel"}
+  ]
+}

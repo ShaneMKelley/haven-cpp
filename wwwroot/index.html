@@ -756,24 +756,20 @@
             }
             if (text === '/plugins') {
                 appendMessage('user', '/plugins');
-                appendMessage('assistant', `<strong>🔌 Active Sovereign Plugins (17 Loaded):</strong><br><br>
-• 🌐 <code>haven.plugin.browser</code> — Sovereign Web Browser & DOM Parser<br>
-• 🎮 <code>haven.plugin.gaming</code> — Steam & Real-Time Game Companion<br>
-• 🌙 <code>haven.plugin.circadian</code> — Circadian Rhythm Caretaker<br>
-• 🎨 <code>haven.plugin.sd_art</code> — Stable Diffusion C++ Studio (Port 8085)<br>
-• 🎙️ <code>haven.plugin.voice_synth</code> — Kokoro Neural Voice (Port 8089)<br>
-• 🎵 <code>haven.plugin.yt_music</code> — YouTube Music Controller<br>
-• 📁 <code>haven.plugin.workspace_coder</code> — Local Workspace Code Assistant<br>
-• 🐚 <code>haven.plugin.terminal</code> — Native Terminal & Shell Sandbox<br>
-• 📋 <code>haven.plugin.clipboard</code> — Windows Clipboard Context Bridge<br>
-• 🧠 <code>haven.plugin.knowledge_graph</code> — Relational Knowledge Graph<br>
-• 🎙️ <code>haven.plugin.whisper_ear</code> — Whisper Audio Ear (Port 8087)<br>
-• 💡 <code>haven.plugin.smart_home</code> — Home Assistant & Ambient IoT<br>
-• 👁️ <code>haven.plugin.screen_vision</code> — Desktop Screen Vision<br>
-• 📚 <code>haven.plugin.vault_sync</code> — Obsidian Vault Chronicle<br>
-• 🌐 <code>haven.plugin.web_research</code> — Wikipedia & Live Weather<br>
-• 🖥️ <code>haven.plugin.system_sensory</code> — System Telemetry & RAM<br>
-• 💬 <code>haven.plugin.discord_bridge</code> — Sanctuary Discord Bridge`);
+                const assistantBubble = appendMessage('assistant', '<span style="color:var(--text-muted);">Loading active sovereign plugins...</span>');
+                try {
+                    const resp = await fetch('/api/plugins');
+                    const data = await resp.json();
+                    const list = data.plugins || [];
+                    let html = `<strong>🔌 Active Sovereign Plugins (${list.length} Loaded):</strong><br><br>`;
+                    list.forEach(p => {
+                        html += `• <strong>${escapeHtml(p.name)}</strong> <span style="font-size:10px; color:var(--cyan); border:1px solid rgba(6,182,212,0.3); border-radius:4px; padding:1px 4px;">v${escapeHtml(p.version)}</span> <span style="font-size:10px; color:var(--primary-light);">by 👤 ${escapeHtml(p.author || 'Haven Sovereign Core')}</span><br>
+                                 <div style="font-size:11px; color:var(--text-muted); margin-left:14px; margin-bottom:6px;"><code>${escapeHtml(p.id)}</code> — ${escapeHtml(p.description)}</div>`;
+                    });
+                    assistantBubble.innerHTML = html;
+                } catch (e) {
+                    assistantBubble.innerHTML = `<span style="color:#ef4444;">Failed to load plugins: ${e.message}</span>`;
+                }
                 return;
             }
             if (text === '/memories' || text === '/vault') {

@@ -835,13 +835,14 @@ private:
                 json += "{\"id\":\"" + escape_json_string(record.metadata.id) 
                      + "\",\"name\":\"" + escape_json_string(record.metadata.name) 
                      + "\",\"version\":\"" + escape_json_string(record.metadata.version)
+                     + "\",\"author\":\"" + escape_json_string(record.metadata.author)
                      + "\",\"description\":\"" + escape_json_string(record.metadata.description) + "\"}";
                 first = false;
             }
             json += "]}";
             std::string resp = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: " 
                              + std::to_string(json.length()) + "\r\n\r\n" + json;
-            send(sock, resp.c_str(), (int)resp.length(), 0);
+            send_all(sock, resp.c_str(), (int)resp.length());
         }
         else if (path == "/api/plugins/reload") {
             size_t reloaded = haven_engine_.get_plugin_manager().reload_all("plugins");
