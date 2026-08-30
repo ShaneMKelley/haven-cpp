@@ -71,6 +71,19 @@ public:
             }
 
             if (resp.empty()) {
+                // Try auto-spawning sd-server.exe in the background if available
+                STARTUPINFOA si = { sizeof(si) };
+                PROCESS_INFORMATION pi;
+                std::string sd_cmd = "C:\\Users\\admin\\stable-diffusion-cpp\\sd-server.exe -m C:\\Users\\admin\\stable-diffusion-cpp\\models\\DreamShaper8_LCM_q4_0.gguf --taesd C:\\Users\\admin\\stable-diffusion-cpp\\models\\taesd.safetensors --sampling-method lcm --steps 6 --cfg-scale 1.8 --listen-port 8085 --threads 8";
+                if (CreateProcessA(NULL, (char*)sd_cmd.c_str(), NULL, NULL, FALSE, CREATE_NO_WINDOW, NULL, "C:\\Users\\admin\\stable-diffusion-cpp", &si, &pi)) {
+                    CloseHandle(pi.hProcess);
+                    CloseHandle(pi.hThread);
+                    Sleep(3000);
+                    resp = http_post_json(L"127.0.0.1", 8085, L"/v1/images/generations", req_json);
+                }
+            }
+
+            if (resp.empty()) {
                 output = "🎨 [SDArtPlugin] Could not connect to Stable Diffusion C++ backend on port 8085. Please ensure sd-server is running.";
                 return true;
             }
