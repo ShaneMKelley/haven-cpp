@@ -50,12 +50,12 @@ void DynamicKVCacheManager::reinit(
     }
 }
 
-void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* v, uint32_t kv_dim) {
-    if (layer >= num_layers_ || current_length_ >= (int)max_context_length_) return;
+void DynamicKVCacheManager::write(uint32_t layer, int pos, const float* k, const float* v, uint32_t kv_dim) {
+    if (layer >= num_layers_ || pos < 0 || pos >= (int)max_context_length_) return;
 
     // Dynamically grow capacity if needed
-    if ((uint32_t)current_length_ >= capacity_) {
-        uint32_t new_cap = std::min(max_context_length_, capacity_ * 2);
+    if ((uint32_t)pos >= capacity_) {
+        uint32_t new_cap = std::min(max_context_length_, std::max(capacity_ * 2, (uint32_t)pos + 512));
         if (new_cap > capacity_) {
             capacity_ = new_cap;
             const size_t new_stride = (size_t)capacity_ * (num_kv_heads_ * head_dim_);
@@ -69,7 +69,7 @@ void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* 
     }
 
     auto& lay = layers_[layer];
-    const size_t offset = (size_t)current_length_ * kv_dim;
+    const size_t offset = (size_t)pos * kv_dim;
     const size_t num_bytes = kv_dim * sizeof(float);
 
     if (offset + kv_dim <= lay.keys.size()) {
@@ -77,9 +77,14 @@ void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* 
         std::memcpy(lay.values.data() + offset, v, num_bytes);
     }
 
-    lay.salience_scores[current_length_] = 1.0f; // New token starts with full salience
-    lay.active_mask[current_length_] = true;
-    lay.current_len = current_length_ + 1;
+    lay.salience_scores[pos] = 1.0f; // New token starts with full salience
+    lay.active_mask[pos] = true;
+    lay.current_len = std::max(lay.current_len, pos + 1);
+    current_length_ = std::max(current_length_, pos + 1);
+}
+
+void DynamicKVCacheManager::append(uint32_t layer, const float* k, const float* v, uint32_t kv_dim) {
+    write(layer, current_length_, k, v, kv_dim);
 }
 
 void DynamicKVCacheManager::update_salience(uint32_t layer, const float* attention_weights, int seq_len) {

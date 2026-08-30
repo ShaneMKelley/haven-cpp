@@ -27,6 +27,9 @@ public:
         float salience_decay = 0.985f
     );
 
+    // Writes K and V vectors for the given layer directly at target position 'pos'
+    void write(uint32_t layer, int pos, const float* k, const float* v, uint32_t kv_dim = 1024);
+
     // Appends new K and V vectors for the given layer at the current position
     void append(uint32_t layer, const float* k, const float* v, uint32_t kv_dim = 1024);
 

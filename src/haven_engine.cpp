@@ -331,7 +331,7 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
 
         if (has_kv) {
             Avx2Math::apply_rope(q_scratch_.data(), k_scratch_.data(), actual_head_dim, cfg.num_heads, cfg.num_kv_heads, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w);
-            kv_cache_.append(l, k_scratch_.data(), v_scratch_.data(), kv_dim);
+            kv_cache_.write(l, pos, k_scratch_.data(), v_scratch_.data(), kv_dim);
         } else {
             Avx2Math::apply_rope(q_scratch_.data(), nullptr, actual_head_dim, cfg.num_heads, 0, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w);
         }
