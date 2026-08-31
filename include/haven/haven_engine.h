@@ -188,6 +188,8 @@ private:
     std::vector<float> logits_scratch_;
     std::vector<float> inv_freqs_;
     std::vector<float> attn_scores_scratch_;
+    std::vector<float> attn_heads_out_scratch_;
+    std::vector<int> attn_indices_scratch_;
 };
 
 } // namespace haven

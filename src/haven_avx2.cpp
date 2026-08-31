@@ -69,17 +69,20 @@ void Avx2Math::rms_norm(float* out, const float* x, const float* weight, int siz
     }
 }
 
-// Rotary Position Embeddings (RoPE) using LLAMA_ROPE_TYPE_NEOX (split-half pairs: i, i + head_dim/2)
+// Rotary Position Embeddings (RoPE) using Google Gemma HalfRope (SWA rope_dim=128 / Global rope_dim=256)
 void Avx2Math::apply_rope(
     float* q, float* k,
     int head_dim, int num_heads, int num_kv_heads,
-    int pos, float freq_base, float freq_scale, const float* freq_factors)
+    int pos, float freq_base, float freq_scale, const float* freq_factors,
+    int rope_dim)
 {
-    const int num_pairs = head_dim / 2;
+    if (rope_dim <= 0 || rope_dim > head_dim) rope_dim = head_dim / 2;
+    const int num_pairs = rope_dim / 2;
+
     for (int h = 0; h < num_heads; ++h) {
         float* q_head = q + h * head_dim;
         for (int i = 0; i < num_pairs; ++i) {
-            float theta = (float)pos * std::pow(freq_base, -2.0f * (float)i / (float)head_dim) * freq_scale;
+            float theta = (float)pos * std::pow(freq_base, -2.0f * (float)i / (float)rope_dim) * freq_scale;
             if (freq_factors && freq_factors[i] > 0.0f) {
                 theta /= freq_factors[i];
             }
@@ -97,7 +100,7 @@ void Avx2Math::apply_rope(
         for (int h = 0; h < num_kv_heads; ++h) {
             float* k_head = k + h * head_dim;
             for (int i = 0; i < num_pairs; ++i) {
-                float theta = (float)pos * std::pow(freq_base, -2.0f * (float)i / (float)head_dim) * freq_scale;
+                float theta = (float)pos * std::pow(freq_base, -2.0f * (float)i / (float)rope_dim) * freq_scale;
                 if (freq_factors && freq_factors[i] > 0.0f) {
                     theta /= freq_factors[i];
                 }

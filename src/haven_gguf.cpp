@@ -211,6 +211,14 @@ bool GgufLoader::parse_header() {
             config_.rope_freq_base_swa = *reinterpret_cast<const float*>(ptr);
             ptr += 4;
         }
+        else if ((key == "gemma4.rope.dimension_count" || key == "llama.rope.dimension_count" || key == "gemma2.rope.dimension_count") && val_type == 4) {
+            config_.rope_dimension_count = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.rope.dimension_count_swa" || key == "gemma2.rope.dimension_count_swa") && val_type == 4) {
+            config_.rope_dimension_count_swa = *reinterpret_cast<const uint32_t*>(ptr);
+            ptr += 4;
+        }
         else if (key == "gemma4.final_logit_softcapping" && val_type == 6) {
             config_.final_logit_softcapping = *reinterpret_cast<const float*>(ptr);
             ptr += 4;

@@ -46,8 +46,14 @@ public:
     // In-place RMS Normalization: y = x / sqrt(mean(x^2) + eps) * weight
     static void rms_norm(float* out, const float* x, const float* weight, int size, float eps);
 
-    // In-place Rotary Position Embeddings (RoPE) for 131k context window (supports optional proportional freq_factors)
-    static void apply_rope(float* q, float* k, int head_dim, int num_heads, int num_kv_heads, int pos, float freq_base, float freq_scale, const float* freq_factors = nullptr);
+    // RoPE Rotary Position Embedding Kernel with partial dimension support
+    static void apply_rope(
+        float* q, float* k,
+        int head_dim, int num_heads, int num_kv_heads,
+        int pos, float freq_base = 10000.0f, float freq_scale = 1.0f,
+        const float* freq_factors = nullptr,
+        int rope_dim = 0
+    );
 
     // Fast In-Place Softmax over an array of floats
     static void softmax(float* x, int size);

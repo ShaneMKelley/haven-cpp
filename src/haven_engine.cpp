@@ -104,6 +104,8 @@ bool HavenEngine::load_model(const std::string& gguf_filepath) {
     per_layer_emb_scratch_.resize(pleias_dim, 0.0f);
     per_layer_proj_scratch_.resize(pleias_dim, 0.0f);
     attn_scores_scratch_.resize(cfg.num_heads * cfg.max_context_length, 0.0f);
+    attn_heads_out_scratch_.resize(cfg.num_heads * cfg.head_dim, 0.0f);
+    attn_indices_scratch_.resize(cfg.max_context_length, 0);
     logits_scratch_.resize(cfg.vocab_size, 0.0f);
 
     // Initialize Persistent Cognitive Memory Vault
@@ -123,23 +125,15 @@ bool HavenEngine::load_model(const std::string& gguf_filepath) {
     }
 
     // Initialize Universal Default Persona Sampler Configuration (Single Source of Truth across CLI & Server)
-    sampler_.get_params().temperature = 0.50f;
-    sampler_.get_params().top_p = 0.90f;
+    sampler_.get_params().temperature = 0.40f;
+    sampler_.get_params().top_p = 0.95f;
     sampler_.get_params().top_k = 40;
     sampler_.get_params().min_p = 0.05f;
-    sampler_.get_params().repetition_penalty = 1.03f;
-    sampler_.get_params().dry_multiplier = 0.8f;
+    sampler_.get_params().repetition_penalty = 1.0f;
+    sampler_.get_params().dry_multiplier = 0.0f;
     sampler_.get_params().dry_base = 1.75f;
     sampler_.get_params().dry_allowed_length = 2;
     sampler_.get_params().dry_penalty_last_n = 64;
-
-    // Suppress loose asterisks for clean, grounded spoken conversation across all frontends
-    for (const std::string& ast : {"*", " *", "**", " **", "***", " ***"}) {
-        auto toks = tokenizer_.encode(ast, false);
-        for (uint32_t t : toks) {
-            sampler_.add_anti_robotic_penalty(t, 2.5f);
-        }
-    }
 
     return true;
 }
@@ -317,9 +311,10 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
             Avx2Math::rms_norm(v_h, v_h, default_norm_weights_.data(), actual_head_dim, cfg.rms_norm_eps);
         }
 
-        // 2c. RoPE Rotary Embeddings
+        // 2c. RoPE Rotary Embeddings (Gemma 4 ISWA: SWA 256 / Global 512 full head rotation)
         bool is_swa = (l % 6 != 5);
         float layer_freq_base = is_swa ? cfg.rope_freq_base_swa : cfg.rope_freq_base;
+        int rope_dim = actual_head_dim;
         const float* freq_factors_w = (!is_swa && rope_freqs_tensor_) ? reinterpret_cast<const float*>(rope_freqs_tensor_->data) : nullptr;
 
         uint32_t kv_source_layer = l;
@@ -330,21 +325,26 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
         }
 
         if (has_kv) {
-            Avx2Math::apply_rope(q_scratch_.data(), k_scratch_.data(), actual_head_dim, cfg.num_heads, cfg.num_kv_heads, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w);
+            Avx2Math::apply_rope(q_scratch_.data(), k_scratch_.data(), actual_head_dim, cfg.num_heads, cfg.num_kv_heads, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w, rope_dim);
             kv_cache_.write(l, pos, k_scratch_.data(), v_scratch_.data(), kv_dim);
         } else {
-            Avx2Math::apply_rope(q_scratch_.data(), nullptr, actual_head_dim, cfg.num_heads, 0, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w);
+            Avx2Math::apply_rope(q_scratch_.data(), nullptr, actual_head_dim, cfg.num_heads, 0, pos, layer_freq_base, cfg.rope_freq_scale, freq_factors_w, rope_dim);
         }
 
-        // 2e. Multi-Head Attention (GQA) with Parallel Head Execution
+        // 2e. Multi-Head Attention (GQA) with Attention Sinks & Zero-Allocation Scratch Buffers
         const int seq_len = std::min(pos + 1, (int)cfg.max_context_length);
         const int s_start = is_swa ? std::max(0, seq_len - 512) : 0;
-        const int active_attn_len = seq_len - s_start;
+
+        int active_attn_len = 0;
+        if (is_swa && s_start > 4) {
+            for (int s = 0; s < 4; ++s) attn_indices_scratch_[active_attn_len++] = s; // Pinned Sink (BOS / System Anchor)
+            for (int s = s_start; s < seq_len; ++s) attn_indices_scratch_[active_attn_len++] = s; // SWA Window
+        } else {
+            for (int s = s_start; s < seq_len; ++s) attn_indices_scratch_[active_attn_len++] = s;
+        }
 
         const float* layer_k = kv_cache_.get_layer(kv_source_layer).keys.data();
         const float* layer_v = kv_cache_.get_layer(kv_source_layer).values.data();
-
-        std::vector<float> attn_heads_out(q_dim, 0.0f);
 
         #pragma omp parallel for schedule(static)
         for (uint32_t h = 0; h < cfg.num_heads; ++h) {
@@ -353,28 +353,28 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
             float* scores = attn_scores_scratch_.data() + h * cfg.max_context_length;
 
             // Compute QK^T over active window with Softcapping
-            for (int s = 0; s < active_attn_len; ++s) {
-                int abs_s = s_start + s;
+            for (int i = 0; i < active_attn_len; ++i) {
+                int abs_s = attn_indices_scratch_[i];
                 const float* k_s = layer_k + abs_s * kv_dim + kv_head_idx * actual_head_dim;
                 float dot = 0.0f;
                 for (int d = 0; d < actual_head_dim; ++d) {
                     dot += q_h[d] * k_s[d];
                 }
-                scores[s] = dot * attn_scale;
-                scores[s] = 50.0f * std::tanh(scores[s] / 50.0f);
+                scores[i] = dot * attn_scale;
+                scores[i] = 50.0f * std::tanh(scores[i] / 50.0f);
             }
 
             // Pure Raw Attention Softmax over active window
             Avx2Math::softmax(scores, active_attn_len);
 
             // Weighted Value Accumulation (Attn @ V) over active window
-            float* out_h = attn_heads_out.data() + h * actual_head_dim;
+            float* out_h = attn_heads_out_scratch_.data() + h * actual_head_dim;
             for (int d = 0; d < actual_head_dim; ++d) {
                 float acc = 0.0f;
-                for (int s = 0; s < active_attn_len; ++s) {
-                    int abs_s = s_start + s;
+                for (int i = 0; i < active_attn_len; ++i) {
+                    int abs_s = attn_indices_scratch_[i];
                     const float* v_s = layer_v + abs_s * kv_dim + kv_head_idx * actual_head_dim;
-                    acc += scores[s] * v_s[d];
+                    acc += scores[i] * v_s[d];
                 }
                 out_h[d] = acc;
             }
@@ -382,9 +382,9 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
 
         // 2f. Attention Output Projection
         if (lt.attn_output) {
-            Avx2Math::gemv(attn_out_scratch_.data(), *lt.attn_output, attn_heads_out.data(), cfg.embedding_dim, q_dim);
+            Avx2Math::gemv(attn_out_scratch_.data(), *lt.attn_output, attn_heads_out_scratch_.data(), cfg.embedding_dim, q_dim);
         } else {
-            for (size_t i = 0; i < cfg.embedding_dim; ++i) attn_out_scratch_[i] = attn_heads_out[i % q_dim];
+            for (size_t i = 0; i < cfg.embedding_dim; ++i) attn_out_scratch_[i] = attn_heads_out_scratch_[i % q_dim];
         }
 
         // 2f-2. Post-Attention Norm (Gemma 2 / 4)
