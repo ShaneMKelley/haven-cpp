@@ -537,7 +537,11 @@ private:
                 }
 
                 std::string piece = haven_engine_.detokenize(next_tok);
-                if (piece.find("<turn|>") != std::string::npos || piece.find("<eos>") != std::string::npos) {
+                if (piece.find("<turn|>") != std::string::npos || 
+                    piece.find("<end_of_turn>") != std::string::npos || 
+                    piece.find("<eos>") != std::string::npos || 
+                    piece.find("<|turn") != std::string::npos || 
+                    piece.find("<start_of_turn>") != std::string::npos) {
                     break;
                 }
 
@@ -563,7 +567,11 @@ private:
                 }
 
                 std::string piece = haven_engine_.detokenize(next_tok);
-                if (piece.find("<turn|>") != std::string::npos || piece.find("<eos>") != std::string::npos) {
+                if (piece.find("<turn|>") != std::string::npos || 
+                    piece.find("<end_of_turn>") != std::string::npos || 
+                    piece.find("<eos>") != std::string::npos || 
+                    piece.find("<|turn") != std::string::npos || 
+                    piece.find("<start_of_turn>") != std::string::npos) {
                     break;
                 }
 

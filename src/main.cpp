@@ -294,19 +294,27 @@ int main(int argc, char** argv) {
         std::cout << "\n✨ Aura: " << std::flush;
         std::vector<uint32_t> turn_generated_tokens;
         std::string accumulated_output;
+        bool ended_with_turn_tag = false;
 
-        for (int gen = 0; gen < 1024; ++gen) {
+        for (int gen = 0; gen < 512; ++gen) {
             uint32_t next_tok = haven_engine.get_sampler().sample(
                 logits.data(), haven_engine.get_config().vocab_size, turn_generated_tokens);
             turn_generated_tokens.push_back(next_tok);
 
-            // Gemma 4 end of turn tokens: <eos> (1), <turn|> (106), </s> (212)
+            // Gemma 4 end of turn tokens: <eos> (1), <turn|> (106), </s> (212), <end_of_turn>
             if (next_tok == haven_engine.get_tokenizer().eos_token() || next_tok == 1 || next_tok == 106 || next_tok == 212) {
+                ended_with_turn_tag = true;
                 break;
             }
 
             std::string piece = haven_engine.detokenize(next_tok);
-            if (piece.find("<turn|>") != std::string::npos || piece.find("<eos>") != std::string::npos) {
+            if (piece.find("<turn|>") != std::string::npos || 
+                piece.find("<end_of_turn>") != std::string::npos || 
+                piece.find("<eos>") != std::string::npos ||
+                piece.find("<|turn") != std::string::npos ||
+                piece.find("<start_of_turn>") != std::string::npos) 
+            {
+                ended_with_turn_tag = true;
                 break;
             }
 
@@ -345,10 +353,12 @@ int main(int argc, char** argv) {
             haven_engine.forward(next_tok, active_kv_pos++, logits.data());
         }
 
-        // Forward closing turn tag to KV cache
-        auto closing_tokens = haven_engine.tokenize("<turn|>\n", false);
-        for (uint32_t ct : closing_tokens) {
-            haven_engine.forward(ct, active_kv_pos++, nullptr);
+        // Forward closing turn tag to KV cache only if not already emitted
+        if (!ended_with_turn_tag) {
+            auto closing_tokens = haven_engine.tokenize("<turn|>\n", false);
+            for (uint32_t ct : closing_tokens) {
+                haven_engine.forward(ct, active_kv_pos++, nullptr);
+            }
         }
 
 #ifdef _WIN32

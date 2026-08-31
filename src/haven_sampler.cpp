@@ -39,19 +39,22 @@ uint32_t PersonaSampler::sample(
         return best_token;
     }
 
-    // 1. Standard Token Frequency / Repetition Penalty
+    // 1. Standard Token Frequency / Repetition Penalty (Sliding Window of 64 tokens)
     if (params_.repetition_penalty > 1.0f && !recent_tokens.empty()) {
         std::unordered_map<uint32_t, int> token_counts;
-        size_t start_idx = (recent_tokens.size() > (size_t)params_.dry_penalty_last_n) 
-            ? (recent_tokens.size() - params_.dry_penalty_last_n) : 0;
+        size_t window_sz = std::min((size_t)64, (size_t)params_.dry_penalty_last_n);
+        size_t start_idx = (recent_tokens.size() > window_sz) ? (recent_tokens.size() - window_sz) : 0;
 
         for (size_t i = start_idx; i < recent_tokens.size(); ++i) {
-            token_counts[recent_tokens[i]]++;
+            uint32_t t = recent_tokens[i];
+            if (t >= 256) { // Skip base formatting, whitespace, and special tokens < 256
+                token_counts[t]++;
+            }
         }
 
         for (const auto& [token_id, count] : token_counts) {
             if (token_id < vocab_size) {
-                float penalty = std::pow(params_.repetition_penalty, std::min(count, 4));
+                float penalty = 1.0f + (params_.repetition_penalty - 1.0f) * std::min(count, 3);
                 if (logits[token_id] > 0.0f) {
                     logits[token_id] /= penalty;
                 } else {
@@ -67,8 +70,8 @@ uint32_t PersonaSampler::sample(
         uint32_t last_token = recent_tokens.back();
 
         // 2a. Consecutive Exact Word Stutter Suppression (skip formatting tokens < 256)
-        if (last_token < vocab_size && last_token > 256) {
-            logits[last_token] -= 2.0f;
+        if (last_token < vocab_size && last_token >= 256) {
+            logits[last_token] -= 1.5f;
         }
 
         // 2b. 3-gram and 2-gram Phrase Repetition Suppression
@@ -79,8 +82,8 @@ uint32_t PersonaSampler::sample(
             for (size_t i = 0; i + 2 < n_tokens; ++i) {
                 if (recent_tokens[i] == prev2 && recent_tokens[i + 1] == prev1) {
                     uint32_t repeated_follower = recent_tokens[i + 2];
-                    if (repeated_follower < vocab_size) {
-                        logits[repeated_follower] -= 4.0f; // Strongly break 3-gram phrase loops
+                    if (repeated_follower < vocab_size && repeated_follower >= 256) {
+                        logits[repeated_follower] -= 2.0f; // Break 3-gram phrase loops gently
                     }
                 }
             }
