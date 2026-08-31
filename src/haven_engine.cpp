@@ -123,15 +123,15 @@ bool HavenEngine::load_model(const std::string& gguf_filepath) {
     }
 
     // Initialize Universal Default Persona Sampler Configuration (Single Source of Truth across CLI & Server)
-    sampler_.get_params().temperature = 0.70f;
+    sampler_.get_params().temperature = 0.50f;
     sampler_.get_params().top_p = 0.90f;
     sampler_.get_params().top_k = 40;
     sampler_.get_params().min_p = 0.05f;
-    sampler_.get_params().repetition_penalty = 1.08f;
+    sampler_.get_params().repetition_penalty = 1.03f;
     sampler_.get_params().dry_multiplier = 0.8f;
     sampler_.get_params().dry_base = 1.75f;
     sampler_.get_params().dry_allowed_length = 2;
-    sampler_.get_params().dry_penalty_last_n = 256;
+    sampler_.get_params().dry_penalty_last_n = 64;
 
     // Suppress loose asterisks for clean, grounded spoken conversation across all frontends
     for (const std::string& ast : {"*", " *", "**", " **", "***", " ***"}) {
@@ -271,7 +271,7 @@ void HavenEngine::forward(uint32_t token, int pos, float* out_logits, uint32_t a
         const int q_dim = (lt.attn_q && lt.attn_q->shape.size() > 1) ? (int)lt.attn_q->shape[1] : (cfg.num_heads * cfg.head_dim);
         const int kv_dim = (lt.attn_k && lt.attn_k->shape.size() > 1) ? (int)lt.attn_k->shape[1] : (cfg.num_kv_heads * cfg.head_dim);
         const int actual_head_dim = (cfg.num_heads > 0) ? (q_dim / cfg.num_heads) : cfg.head_dim;
-        const float attn_scale = 1.0f; // Gemma 4 uses self.scaling = 1.0 (no pre-attn scaling)
+        const float attn_scale = 1.0f; // Gemma 4 self.scaling = 1.0
         const int gqa_ratio = std::max(1u, cfg.num_heads / cfg.num_kv_heads);
 
         // 2a. Pre-Attention RMSNorm

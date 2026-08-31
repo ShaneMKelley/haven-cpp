@@ -88,7 +88,7 @@ struct ModelConfig {
     uint32_t num_kv_heads = 8;
     uint32_t head_dim = 128;
     uint32_t max_context_length = 131072;
-    float rope_freq_base = 10000.0f;
+    float rope_freq_base = 500000.0f;
     float rope_freq_base_swa = 10000.0f;
     float rope_freq_scale = 1.0f;
     float rms_norm_eps = 1e-5f;

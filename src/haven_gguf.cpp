@@ -199,6 +199,18 @@ bool GgufLoader::parse_header() {
             config_.sliding_window = *reinterpret_cast<const uint32_t*>(ptr);
             ptr += 4;
         }
+        else if ((key == "gemma4.rope.freq_base" || key == "llama.rope.freq_base" || key == "gemma2.rope.freq_base") && val_type == 6) {
+            config_.rope_freq_base = *reinterpret_cast<const float*>(ptr);
+            ptr += 4;
+        }
+        else if ((key == "gemma4.rope.freq_base" || key == "llama.rope.freq_base" || key == "gemma2.rope.freq_base") && val_type == 4) {
+            config_.rope_freq_base = (float)(*reinterpret_cast<const uint32_t*>(ptr));
+            ptr += 4;
+        }
+        else if ((key == "gemma4.rope.freq_base_swa" || key == "gemma2.rope.freq_base_swa") && val_type == 6) {
+            config_.rope_freq_base_swa = *reinterpret_cast<const float*>(ptr);
+            ptr += 4;
+        }
         else if (key == "gemma4.final_logit_softcapping" && val_type == 6) {
             config_.final_logit_softcapping = *reinterpret_cast<const float*>(ptr);
             ptr += 4;
