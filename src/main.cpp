@@ -145,7 +145,13 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    DWORD dwMode = 0;
+    if (GetConsoleMode(hOut, &dwMode)) {
+        SetConsoleMode(hOut, dwMode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
 #endif
+    std::cout << std::unitbuf;
 
     std::string model_path = "C:\\Users\\admin\\gemma4-turbo-family\\haven-chat-v5.0.gguf";
     bool run_benchmark = false;
@@ -285,6 +291,8 @@ int main(int argc, char** argv) {
             continue;
         }
 
+        std::cout << "💭 (Aura is processing...)\r" << std::flush;
+
         // Format turn with Gemma 4 chat template and dynamic plugin capabilities
         std::string turn_prompt = "<start_of_turn>user\n" + user_input + "<end_of_turn>\n<start_of_turn>model\n";
         auto turn_tokens = haven_engine.tokenize(turn_prompt, false);
@@ -296,7 +304,7 @@ int main(int argc, char** argv) {
             haven_engine.forward(turn_tokens[i], active_kv_pos++, is_last ? logits.data() : nullptr);
         }
 
-        std::cout << "\n✨ Aura: " << std::flush;
+        std::cout << "                                  \r✨ Aura: " << std::flush;
         std::vector<uint32_t> turn_generated_tokens;
         std::string accumulated_output;
         bool ended_with_turn_tag = false;
