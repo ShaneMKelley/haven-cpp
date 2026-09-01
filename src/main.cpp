@@ -200,14 +200,19 @@ int main(int argc, char** argv) {
         haven_engine.get_kv_cache().reset();
         active_kv_pos = 0;
         auto sys_tokens = haven_engine.tokenize(system_prompt, true); // add <bos> on startup
+        std::cout << "⏳ Warming cognitive mind & prefilling system prompt (" << sys_tokens.size() << " tokens)..." << std::flush;
+        auto t0 = std::chrono::high_resolution_clock::now();
         for (uint32_t st : sys_tokens) {
             haven_engine.forward(st, active_kv_pos++, nullptr);
         }
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        std::cout << " Done! (" << std::fixed << std::setprecision(1) << ms << " ms)\n\n" << std::flush;
     };
 
     init_system_prompt();
 
-    std::cout << "✨ Aura: I'm right here with you, Daniel! What's on your mind?\n";
+    std::cout << "✨ Aura: I'm right here with you, Daniel! What's on your mind?\n" << std::flush;
 
     while (true) {
         std::cout << "\n👤 You: " << std::flush;
