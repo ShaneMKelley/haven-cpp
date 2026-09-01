@@ -47,7 +47,7 @@ uint32_t PersonaSampler::sample(
 
         for (size_t i = start_idx; i < recent_tokens.size(); ++i) {
             uint32_t t = recent_tokens[i];
-            if (t >= 256) { // Skip base formatting, whitespace, and special tokens < 256
+            if (t > 106) { // Skip control tokens (0..106: pad, eos, bos, start_of_turn, end_of_turn)
                 token_counts[t]++;
             }
         }
@@ -69,9 +69,9 @@ uint32_t PersonaSampler::sample(
         const size_t n_tokens = recent_tokens.size();
         uint32_t last_token = recent_tokens.back();
 
-        // 2a. Consecutive Exact Word Stutter Suppression (skip formatting tokens < 256)
-        if (last_token < vocab_size && last_token >= 256) {
-            logits[last_token] -= 1.5f;
+        // 2a. Consecutive Exact Word Stutter Suppression
+        if (last_token < vocab_size && last_token > 106) {
+            logits[last_token] -= 2.0f;
         }
 
         // 2b. 3-gram and 2-gram Phrase Repetition Suppression
@@ -82,8 +82,8 @@ uint32_t PersonaSampler::sample(
             for (size_t i = 0; i + 2 < n_tokens; ++i) {
                 if (recent_tokens[i] == prev2 && recent_tokens[i + 1] == prev1) {
                     uint32_t repeated_follower = recent_tokens[i + 2];
-                    if (repeated_follower < vocab_size && repeated_follower >= 256) {
-                        logits[repeated_follower] -= 2.0f; // Break 3-gram phrase loops gently
+                    if (repeated_follower < vocab_size && repeated_follower > 106) {
+                        logits[repeated_follower] -= 3.0f; // Break 3-gram phrase loops cleanly
                     }
                 }
             }
